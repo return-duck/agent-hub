@@ -42,6 +42,17 @@ find_node() {
   return 1
 }
 
+# HTTP 就绪检查：优先 curl（几乎都有），退回 node fetch（需要 Node >=18）
+http_ok() { # http_ok <url> <期望子串>
+  local url="$1" expect="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -s --max-time 8 "$url" 2>/dev/null | grep -q "$expect" && return 0
+    return 1
+  fi
+  [ -n "${NODE_BIN:-}" ] || return 1
+  "$NODE_BIN" -e "fetch('$url').then(r=>r.text()).then(t=>process.exit(t.includes('$expect')?0:1)).catch(()=>process.exit(1))" 2>/dev/null
+}
+
 step() { echo; echo "############ $* ############"; }
 mem()  { free -m | awk '/^Mem:/{printf "  total=%sMB used=%sMB free=%sMB available=%sMB\n",$2,$3,$4,$7}'; }
 
@@ -182,7 +193,7 @@ echo "  单元已安装并 enable"
 step "5. 启动服务（先 runtime 后 server）"
 systemctl start agent-stack-runtime
 for i in $(seq 1 60); do
-  if "$NODE_BIN" -e "fetch('http://127.0.0.1:$RUNTIME_PORT/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+  if http_ok "http://127.0.0.1:$RUNTIME_PORT/healthz" '"status":"ok"'; then
     echo "  runtime 就绪（${i}s）"; break
   fi
   sleep 1
@@ -192,7 +203,7 @@ mem
 systemctl start agent-stack-server
 OK=0
 for i in $(seq 1 150); do
-  if "$NODE_BIN" -e "fetch('http://127.0.0.1:$APP_PORT/actuator/health').then(r=>r.text()).then(t=>process.exit(t.includes('UP')?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+  if http_ok "http://127.0.0.1:$APP_PORT/actuator/health" '"status":"UP"'; then
     echo "  server 就绪（${i}s）"; OK=1; break
   fi
   if ! systemctl is-active --quiet agent-stack-server; then
