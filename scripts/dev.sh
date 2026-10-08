@@ -20,7 +20,7 @@ info "2/4 启动 runtime (Node + LangChain) :8090 ..."
 if port_open 8090; then
   warn "8090 已在监听，跳过"
 else
-  (cd "$ROOT/runtime" && nohup npx tsx src/server.ts >"$LOG_DIR/runtime.log" 2>&1 &)
+  start_detached "$ROOT/runtime" "$LOG_DIR/runtime.log" npx tsx src/server.ts
   wait_port 8090 60 runtime || { tail -20 "$LOG_DIR/runtime.log"; exit 1; }
 fi
 
@@ -28,7 +28,7 @@ info "3/4 启动 server (Spring Boot) :8080 ..."
 if port_open 8080; then
   warn "8080 已在监听，跳过"
 else
-  (cd "$ROOT/server" && nohup "$ROOT/scripts/mvn.sh" -q -DskipTests spring-boot:run >"$LOG_DIR/server.log" 2>&1 &)
+  start_detached "$ROOT/server" "$LOG_DIR/server.log" "$ROOT/scripts/mvn.sh" -q -DskipTests spring-boot:run
   wait_port 8080 180 server || { tail -30 "$LOG_DIR/server.log"; exit 1; }
 fi
 
@@ -36,7 +36,7 @@ info "4/4 启动 web (Vite) :5173 ..."
 if port_open 5173; then
   warn "5173 已在监听，跳过"
 else
-  (cd "$ROOT/web" && nohup npm run dev >"$LOG_DIR/web.log" 2>&1 &)
+  start_detached "$ROOT/web" "$LOG_DIR/web.log" npm run dev
   wait_port 5173 90 web || { tail -20 "$LOG_DIR/web.log"; exit 1; }
 fi
 

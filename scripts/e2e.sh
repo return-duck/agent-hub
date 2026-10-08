@@ -24,13 +24,13 @@ if [ "$NO_START" -eq 0 ]; then
 
   if ! port_open 8090; then
     info "启动 runtime :8090 ..."
-    (cd "$ROOT/runtime" && nohup npx tsx src/server.ts >"$LOG_DIR/runtime.log" 2>&1 &)
+    start_detached "$ROOT/runtime" "$LOG_DIR/runtime.log" npx tsx src/server.ts
     wait_port 8090 60 runtime || { tail -20 "$LOG_DIR/runtime.log"; exit 1; }
   fi
 
   if ! port_open 8080; then
     info "启动 server :8080 ..."
-    (cd "$ROOT/server" && nohup "$ROOT/scripts/mvn.sh" -q -DskipTests spring-boot:run >"$LOG_DIR/server.log" 2>&1 &)
+    start_detached "$ROOT/server" "$LOG_DIR/server.log" "$ROOT/scripts/mvn.sh" -q -DskipTests spring-boot:run
     wait_port 8080 180 server || { tail -30 "$LOG_DIR/server.log"; exit 1; }
   fi
 fi
