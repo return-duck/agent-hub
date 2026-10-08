@@ -20,6 +20,28 @@ HEAP_MB=256
 APP_PORT=8080
 RUNTIME_PORT=8090
 
+# ---- 运行时二进制解析：不能写死 .toolchain 路径 ----
+# 安装脚本会"优先复用系统已装的 Java"，所以服务器上可能根本没有 .toolchain/jre。
+# 这里按 已下载的 → 系统已装的 顺序解析，Node 同理。
+find_java() {
+  local c=() bin major
+  [ -x "$APP_DIR/.toolchain/jre/bin/java" ] && { echo "$APP_DIR/.toolchain/jre/bin/java"; return 0; }
+  command -v java >/dev/null 2>&1 && c+=("$(command -v java)")
+  for bin in /usr/lib/jvm/*/bin/java /usr/lib/jvm/*/jre/bin/java /opt/java/*/bin/java; do
+    [ -x "$bin" ] && c+=("$bin")
+  done
+  for bin in "${c[@]}"; do
+    major="$("$bin" -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/' || true)"
+    [ -n "$major" ] && [ "$major" -ge 21 ] 2>/dev/null && { echo "$bin"; return 0; }
+  done
+  return 1
+}
+find_node() {
+  if [ -x "$APP_DIR/.toolchain/node/bin/node" ]; then echo "$APP_DIR/.toolchain/node/bin/node"; return 0; fi
+  command -v node >/dev/null 2>&1 && { command -v node; return 0; }
+  return 1
+}
+
 step() { echo; echo "############ $* ############"; }
 mem()  { free -m | awk '/^Mem:/{printf "  total=%sMB used=%sMB free=%sMB available=%sMB\n",$2,$3,$4,$7}'; }
 
@@ -30,6 +52,17 @@ echo "--- 我的服务状态 ---"
 systemctl is-active agent-stack-server agent-stack-runtime 2>&1 | tr '\n' ' '; echo
 echo "--- 正在监听 ---"
 (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | head -20
+
+step "0b. 解析运行时二进制与校验产物"
+JAVA_BIN="$(find_java)" && echo "  JAVA_BIN = $JAVA_BIN" || { echo "  ❌ 找不到 >=21 的 Java"; JAVA_BIN=""; }
+NODE_BIN="$(find_node)" && echo "  NODE_BIN = $NODE_BIN" || { echo "  ❌ 找不到 node"; NODE_BIN=""; }
+[ -n "$JAVA_BIN" ] && "$JAVA_BIN" -version 2>&1 | head -1 | sed 's/^/    /'
+[ -n "$NODE_BIN" ] && echo "    node $("$NODE_BIN" -v)"
+echo "--- 产物是否就位 ---"
+ls -l "$APP_DIR/current/agent-stack-server.jar" 2>/dev/null | sed 's/^/  /' || echo "  ❌ 缺少 jar"
+ls -l "$APP_DIR/current/runtime/dist/main.js" 2>/dev/null | sed 's/^/  /' || echo "  ❌ 缺少 runtime dist/main.js"
+ls -l "$APP_DIR/current/runtime/node_modules" -d 2>/dev/null | sed 's/^/  /' || echo "  ❌ 缺少 node_modules"
+ls -l "$APP_DIR/current" 2>/dev/null | sed 's/^/  /'
 
 step "1. 原始失败原因（改动之前的日志，用于定位根因）"
 echo "--- agent-stack-server 最后 60 行 ---"
@@ -62,6 +95,12 @@ else
   UNIT8080=""
 fi
 
+if [ -z "$JAVA_BIN" ] || [ -z "$NODE_BIN" ]; then
+  echo "❌ 缺少运行时（Java/Node），无法继续。请先安装： dnf install -y java-21-openjdk-headless"
+  echo "   然后重新运行本脚本。"
+  exit 1
+fi
+
 step "3. 释放内存：停掉 8080 上的既有应用（用户已授权；只停服务不删文件，可随时恢复）"
 if [ -n "${UNIT8080:-}" ] && [ "$UNIT8080" != "agent-stack-server.service" ]; then
   echo "  停止并禁止自启: $UNIT8080"
@@ -92,7 +131,7 @@ Group=$RUN_USER
 WorkingDirectory=$APP_DIR/current/runtime
 EnvironmentFile=$APP_DIR/shared/runtime.env
 Environment=NODE_ENV=production
-ExecStart=$APP_DIR/.toolchain/node/bin/node dist/main.js
+ExecStart=${NODE_BIN} dist/main.js
 Restart=on-failure
 RestartSec=15
 TimeoutStopSec=15
@@ -116,7 +155,7 @@ User=$RUN_USER
 Group=$RUN_USER
 WorkingDirectory=$APP_DIR/current
 EnvironmentFile=$APP_DIR/shared/server.env
-ExecStart=$APP_DIR/.toolchain/jre/bin/java \\
+ExecStart=${JAVA_BIN} \\
     -Xms${HEAP_MB}m -Xmx${HEAP_MB}m -XX:MaxMetaspaceSize=128m -Xss512k \\
     -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError \\
     -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$APP_DIR/logs \\
@@ -143,7 +182,7 @@ echo "  单元已安装并 enable"
 step "5. 启动服务（先 runtime 后 server）"
 systemctl start agent-stack-runtime
 for i in $(seq 1 60); do
-  if "$APP_DIR/.toolchain/node/bin/node" -e "fetch('http://127.0.0.1:$RUNTIME_PORT/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+  if "$NODE_BIN" -e "fetch('http://127.0.0.1:$RUNTIME_PORT/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
     echo "  runtime 就绪（${i}s）"; break
   fi
   sleep 1
@@ -153,7 +192,7 @@ mem
 systemctl start agent-stack-server
 OK=0
 for i in $(seq 1 150); do
-  if "$APP_DIR/.toolchain/node/bin/node" -e "fetch('http://127.0.0.1:$APP_PORT/actuator/health').then(r=>r.text()).then(t=>process.exit(t.includes('UP')?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+  if "$NODE_BIN" -e "fetch('http://127.0.0.1:$APP_PORT/actuator/health').then(r=>r.text()).then(t=>process.exit(t.includes('UP')?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
     echo "  server 就绪（${i}s）"; OK=1; break
   fi
   if ! systemctl is-active --quiet agent-stack-server; then
