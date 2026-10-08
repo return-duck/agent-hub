@@ -282,6 +282,28 @@ bash deploy/deploy.sh
 单一 origin、无需 CORS、无需 nginx、安全组只需放行一个端口。
 想让前端独立部署（CDN/nginx）就把 `SERVE_WEB=false`，并用 [web/nginx.conf](web/nginx.conf) 托管。
 
+### ⚠️ 内存是这套部署的硬约束（真实踩坑记录）
+
+一次真实部署事故：**1674MB 的 ECS** 上，MySQL + 既有 Java 应用 + 本项目 Node runtime + 本项目
+Spring Boot（当时堆 512MB）把内存挤爆，Spring Boot 起不来；而原来的 unit 只写了
+`Restart=on-failure` 没有频率限制，systemd 每 5 秒重启一次、每次重新申请堆内存，
+最终把整机拖到**连 sshd 都发不出 SSH banner**（TCP 能连、80/8080 也无任何响应，
+ping 通但 RTT 抖动极大）。外部无法自救，只能从控制台重启。
+
+由此固化下来的规则：
+
+| 规则 | 原因 |
+|---|---|
+| 堆按内存 **1/4** 算（夹 256MB..1536MB），而不是 `MaxRAMPercentage` | 后者只看总内存，不知道同机还有 MySQL 与其它应用 |
+| 两个 unit 必须写 `StartLimitIntervalSec` / `StartLimitBurst` | 否则 OOM Kill → 重启 → 再 OOM，无限抖动，机器无法自愈 |
+| 健康检查失败时先 `systemctl stop` 再退出 | 不给抖动留机会 |
+| **单机建议 ≥2GB，且不要把 MySQL 与本项目挤在一起** | 1.6GB 上四五个 Java/Node 进程必然互相踩 |
+
+同机内存紧张时的两条出路：把 MySQL 换成阿里云 RDS（改 `deploy.env` 里的 `DB_HOST`），或升配实例。
+
+真出现卡死时用 [`deploy/rescue.sh`](deploy/rescue.sh)：它先停服务释放内存，再以保守配置
+（堆 256MB、端口 8080、限制重启次数）重新装好并启动。端口用 8080 是因为它通常已被安全组放行。
+
 ### 部署前必须知道的三件事
 
 1. **安全组是独立的一层**。阿里云控制台 → 实例 → 安全组 → 入方向，放行 `TCP <APP_PORT>`（默认 8081）。

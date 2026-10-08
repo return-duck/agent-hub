@@ -42,7 +42,6 @@ if [ -n "${DEPLOY_SSH_KEY:-}" ] && [ -f "${DEPLOY_SSH_KEY/#\~/$HOME}" ]; then
 elif [ -n "${DEPLOY_HOST_PASSWORD:-}" ]; then
   ASKPASS="$(mktemp)"
   trap 'rm -f "$ASKPASS"' EXIT
-  printf '#!/bin/sh\nprintf %%s "$DEPLOY_HOST_PASSWORD"\n' > "$ASKPASS"   # 占位，下面覆盖
   cat > "$ASKPASS" <<ASK
 #!/bin/sh
 grep -E '^DEPLOY_HOST_PASSWORD=' "$CONFIG" | head -1 | cut -d= -f2-
