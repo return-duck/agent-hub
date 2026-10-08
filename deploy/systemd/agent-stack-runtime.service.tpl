@@ -4,6 +4,13 @@ Documentation=file://__APP_DIR__/current
 After=network-online.target
 Wants=network-online.target
 
+# 关键：内存不足时 JVM 会被 OOM Kill，如果只写 Restart=on-failure 而不限制频率，
+# systemd 会每几秒重启一次、每次都重新申请堆内存 —— 结果是整台机器被抖死，
+# 连 sshd 都发不出 banner（这个故障现场真实发生过）。
+# 限制为 300 秒内最多失败 5 次，之后放弃并保持 failed 状态，等人工介入。
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=__RUN_USER__
@@ -20,7 +27,7 @@ Environment=NODE_ENV=production
 ExecStart=__APP_DIR__/.toolchain/node/bin/node dist/main.js
 
 Restart=on-failure
-RestartSec=3
+RestartSec=15
 TimeoutStopSec=15
 LimitNOFILE=65535
 

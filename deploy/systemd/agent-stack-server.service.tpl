@@ -4,6 +4,13 @@ Documentation=file://__APP_DIR__/current
 After=network-online.target
 Wants=network-online.target
 
+# 关键：内存不足时 JVM 会被 OOM Kill，如果只写 Restart=on-failure 而不限制频率，
+# systemd 会每几秒重启一次、每次都重新申请堆内存 —— 结果是整台机器被抖死，
+# 连 sshd 都发不出 banner（这个故障现场真实发生过）。
+# 限制为 300 秒内最多失败 5 次，之后放弃并保持 failed 状态，等人工介入。
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=__RUN_USER__
@@ -23,7 +30,7 @@ ExecStart=__JAVA_BIN__ \
     -jar __APP_DIR__/current/agent-stack-server.jar
 
 Restart=on-failure
-RestartSec=5
+RestartSec=15
 # Java 收到 SIGTERM 的退出码；application.yml 里配了优雅停机
 SuccessExitStatus=143
 TimeoutStopSec=30

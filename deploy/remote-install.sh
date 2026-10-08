@@ -104,12 +104,12 @@ info "    架构=$(uname -m)  内存=${MEM_MB}MB  系统=$(. /etc/os-release 2>/
 # JVM 堆按内存取 1/3 并夹在 256MB..2GB，取整到 128 的倍数。
 # 之所以不是 MaxRAMPercentage：它按机器总内存算，不知道这台机器上还有 MySQL 与 Node，
 # 1674MB 这种规格上会算出 ~1GB 堆，很容易被 OOM Killer 干掉。
-JVM_HEAP_MB=$(( MEM_MB / 3 ))
+JVM_HEAP_MB=$(( MEM_MB / 4 ))
 [ "$JVM_HEAP_MB" -lt 256 ] && JVM_HEAP_MB=256
-[ "$JVM_HEAP_MB" -gt 2048 ] && JVM_HEAP_MB=2048
+[ "$JVM_HEAP_MB" -gt 1536 ] && JVM_HEAP_MB=1536
 JVM_HEAP_MB=$(( (JVM_HEAP_MB / 128) * 128 ))
 JAVA_OPTS="-Xms${JVM_HEAP_MB}m -Xmx${JVM_HEAP_MB}m -XX:MaxMetaspaceSize=192m -Duser.timezone=UTC"
-info "    JVM 堆: ${JVM_HEAP_MB}MB（按内存 ${MEM_MB}MB 的 1/3 计算，给 MySQL 与 Node 留余量）"
+info "    JVM 堆: ${JVM_HEAP_MB}MB（按内存 ${MEM_MB}MB 的 1/4 计算；同机通常还跑着 MySQL 与其它应用）"
 
 if [ "$MEM_MB" -lt 1800 ]; then
   warn "内存只有 ${MEM_MB}MB：Spring Boot + Node + MySQL 挤在一起会比较紧张。"
@@ -367,6 +367,10 @@ if [ "$FAILED" -eq 0 ]; then
   echo
   echo "  提醒：阿里云【安全组】需要放行 TCP $APP_PORT（它独立于系统防火墙）。"
 else
+  # 关键：失败时先把服务停掉。否则 Restart=on-failure 会持续重启，
+  # 在内存不足的机器上会把整机拖到连 SSH 都连不上（真实故障现场）。
+  warn "为避免持续重启拖垮机器，先停掉未就绪的服务（修复后用 systemctl start 重启即可）"
+  systemctl stop agent-stack-server agent-stack-runtime 2>/dev/null || true
   die "服务没有全部就绪，请看上面的日志。常见原因：
     1. 内存不足（<2GB）导致 JVM 被杀：journalctl -u agent-stack-server | grep -i kill
     2. 数据库连接失败：检查 shared/server.env 里的账号密码
