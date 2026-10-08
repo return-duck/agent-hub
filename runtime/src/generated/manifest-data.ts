@@ -1,0 +1,180 @@
+/* eslint-disable */
+/**
+ * 自动生成，请勿手工修改。
+ * 由 scripts/codegen.mjs 从 contracts/node-manifest.json 生成。
+ * 重新生成：npm run codegen
+ */
+
+export const nodeManifest = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack.local/contracts/node-manifest.json",
+  "title": "NodeManifest",
+  "description": "节点能力清单：runtime 据此装配执行器，web 据此渲染配置表单。新增节点类型只需改这里 + 加一个执行器。",
+  "version": 1,
+  "toolNames": [
+    "calculator",
+    "http_get"
+  ],
+  "nodeTypes": [
+    {
+      "type": "start",
+      "displayName": "开始",
+      "category": "input",
+      "description": "运行入口，声明本次运行的输入变量",
+      "maxIncoming": 0,
+      "maxOutgoing": 1,
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "inputVariables": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "type"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "enum": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "uiSchema": {
+        "inputVariables": {
+          "widget": "variableList"
+        }
+      }
+    },
+    {
+      "type": "prompt",
+      "displayName": "提示词",
+      "category": "prompt",
+      "description": "把模板渲染成一条消息，支持 {{input.x}} 与 {{scratchpad.y}}",
+      "maxIncoming": 1,
+      "maxOutgoing": 1,
+      "configSchema": {
+        "type": "object",
+        "required": [
+          "template"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "system",
+              "human"
+            ],
+            "default": "human"
+          },
+          "template": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "uiSchema": {
+        "template": {
+          "widget": "textarea",
+          "placeholder": "请介绍 {{input.topic}}"
+        },
+        "role": {
+          "widget": "select"
+        }
+      }
+    },
+    {
+      "type": "llm",
+      "displayName": "大模型",
+      "category": "model",
+      "description": "调用模型；配置了工具时会编译成 model → ToolNode → toolsCondition 的 ReAct 循环",
+      "maxIncoming": 1,
+      "maxOutgoing": 1,
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "system": {
+            "type": "string",
+            "default": ""
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0.2
+          },
+          "tools": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "enum": [
+                "calculator",
+                "http_get"
+              ]
+            }
+          },
+          "maxSteps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 6
+          },
+          "outputKey": {
+            "type": "string",
+            "default": "answer"
+          }
+        }
+      },
+      "uiSchema": {
+        "system": {
+          "widget": "textarea",
+          "placeholder": "你是……"
+        },
+        "tools": {
+          "widget": "multiselect"
+        },
+        "temperature": {
+          "widget": "number"
+        },
+        "maxSteps": {
+          "widget": "number"
+        }
+      }
+    },
+    {
+      "type": "end",
+      "displayName": "结束",
+      "category": "output",
+      "description": "汇总输出。默认取最后一条 AI 消息的内容",
+      "maxIncoming": 1,
+      "maxOutgoing": 0,
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "outputKey": {
+            "type": "string",
+            "default": "answer"
+          }
+        }
+      }
+    }
+  ]
+} as const;

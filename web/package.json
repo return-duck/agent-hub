@@ -1,0 +1,29 @@
+{
+  "name": "agent-stack-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent Stack 前端：用 React Flow 画 agent，实时看它跑",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --port 4173",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.12.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "@types/node": "^24.3.0",
+    "vitest": "^3.2.4"
+  }
+}

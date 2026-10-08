@@ -1,0 +1,14 @@
+{
+  "name": "agent-stack",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent Stack —— agent 低代码搭建平台（契约真源与工程脚本）",
+  "scripts": {
+    "codegen": "node scripts/codegen.mjs",
+    "codegen:check": "node scripts/codegen.mjs && git diff --exit-code -- runtime/src/generated web/src/generated"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4"
+  }
+}

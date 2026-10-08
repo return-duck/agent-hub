@@ -1,0 +1,31 @@
+{
+  "name": "agent-stack-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent Stack 运行时：把画布图编译成 LangGraph 并执行，产出协议事件流",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "spike": "tsx scripts/spike.ts",
+    "run-graph": "tsx scripts/run-graph.ts"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.2.17",
+    "@langchain/langgraph": "^1.4.21",
+    "@langchain/openai": "^1.6.2",
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

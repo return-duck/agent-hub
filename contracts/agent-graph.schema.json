@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack.local/contracts/agent-graph.schema.json",
+  "title": "AgentGraph",
+  "description": "画布持久化结构。刻意与 React Flow 的 nodes/edges 形状保持一致，前后端零转换层。",
+  "type": "object",
+  "required": ["schemaVersion", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "type", "position", "data"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": {
+          "description": "节点类型，必须出现在 node-manifest.json 中",
+          "enum": ["start", "prompt", "llm", "end"]
+        },
+        "position": {
+          "type": "object",
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "data": {
+          "type": "object",
+          "required": ["config"],
+          "properties": {
+            "label": { "type": "string" },
+            "config": {
+              "type": "object",
+              "description": "节点配置，形状由 node-manifest.json 中该类型的 configSchema 决定"
+            }
+          }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "source", "target"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

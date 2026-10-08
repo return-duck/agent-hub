@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-stack.local/contracts/events.schema.json",
+  "title": "ProtocolEvent",
+  "description": "运行时事件协议的判别式联合。seq 由 server 作为唯一写入者分配，runtime 只产出语义事件。",
+  "$defs": {
+    "event": {
+      "title": "ProtocolEvent",
+      "type": "object",
+      "required": ["type", "runId", "ts"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 0 },
+        "type": { "type": "string" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": ["string", "null"] },
+        "ts": { "type": "string" },
+        "payload": { "type": "object" }
+      }
+    },
+    "runStarted": {
+      "title": "RunStarted",
+      "type": "object",
+      "required": ["type", "runId", "ts", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "run.started" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": ["string", "null"] },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["model"],
+          "properties": {
+            "graphSchemaVersion": { "type": "integer" },
+            "model": {
+              "type": "object",
+              "required": ["provider", "name", "mode"],
+              "properties": {
+                "provider": { "type": "string" },
+                "name": { "type": "string" },
+                "mode": { "enum": ["scripted", "live"] }
+              }
+            },
+            "input": { "type": "object" }
+          }
+        }
+      }
+    },
+    "nodeStarted": {
+      "title": "NodeStarted",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "node.started" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "nodeType": { "type": "string" },
+            "label": { "type": "string" }
+          }
+        }
+      }
+    },
+    "nodeFinished": {
+      "title": "NodeFinished",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "node.finished" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "nodeType": { "type": "string" },
+            "durationMs": { "type": "number" },
+            "status": { "enum": ["ok", "error"] }
+          }
+        }
+      }
+    },
+    "llmToken": {
+      "title": "LlmToken",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "llm.token" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["delta"],
+          "properties": { "delta": { "type": "string" } }
+        }
+      }
+    },
+    "llmCompleted": {
+      "title": "LlmCompleted",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "llm.completed" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "model": { "type": "string" },
+            "inputTokens": { "type": "integer" },
+            "outputTokens": { "type": "integer" },
+            "messageCount": { "type": "integer" },
+            "finishReason": { "type": "string" },
+            "durationMs": { "type": "number" }
+          }
+        }
+      }
+    },
+    "toolStarted": {
+      "title": "ToolStarted",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "tool.started" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["toolName", "callId"],
+          "properties": {
+            "toolName": { "type": "string" },
+            "callId": { "type": "string" },
+            "args": {}
+          }
+        }
+      }
+    },
+    "toolFinished": {
+      "title": "ToolFinished",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "tool.finished" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["toolName", "callId"],
+          "properties": {
+            "toolName": { "type": "string" },
+            "callId": { "type": "string" },
+            "durationMs": { "type": "number" },
+            "result": { "type": "string" },
+            "isError": { "type": "boolean" },
+            "truncated": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "messageCompleted": {
+      "title": "MessageCompleted",
+      "type": "object",
+      "required": ["type", "runId", "ts", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "message.completed" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": ["string", "null"] },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["role", "content"],
+          "properties": {
+            "role": { "enum": ["system", "user", "assistant", "tool"] },
+            "content": { "type": "string" },
+            "toolCalls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "args": {}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "runError": {
+      "title": "RunError",
+      "type": "object",
+      "required": ["type", "runId", "ts", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "run.error" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": ["string", "null"] },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["code", "message", "retryable"],
+          "properties": {
+            "code": {
+              "enum": [
+                "INVALID_GRAPH",
+                "INVALID_INPUT",
+                "MODEL_ERROR",
+                "TOOL_ERROR",
+                "STEP_LIMIT",
+                "RUNTIME_UNAVAILABLE",
+                "TIMEOUT",
+                "INTERNAL"
+              ]
+            },
+            "message": { "type": "string" },
+            "retryable": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "runFinished": {
+      "title": "RunFinished",
+      "type": "object",
+      "required": ["type", "runId", "ts", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "run.finished" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": ["string", "null"] },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["status", "durationMs"],
+          "properties": {
+            "status": { "enum": ["SUCCEEDED", "FAILED"] },
+            "durationMs": { "type": "number" },
+            "answer": { "type": ["string", "null"] },
+            "totals": {
+              "type": "object",
+              "properties": {
+                "inputTokens": { "type": "integer" },
+                "outputTokens": { "type": "integer" },
+                "llmCalls": { "type": "integer" },
+                "toolCalls": { "type": "integer" },
+                "steps": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/runStarted" },
+    { "$ref": "#/$defs/nodeStarted" },
+    { "$ref": "#/$defs/nodeFinished" },
+    { "$ref": "#/$defs/llmToken" },
+    { "$ref": "#/$defs/llmCompleted" },
+    { "$ref": "#/$defs/toolStarted" },
+    { "$ref": "#/$defs/toolFinished" },
+    { "$ref": "#/$defs/messageCompleted" },
+    { "$ref": "#/$defs/runError" },
+    { "$ref": "#/$defs/runFinished" }
+  ]
+}

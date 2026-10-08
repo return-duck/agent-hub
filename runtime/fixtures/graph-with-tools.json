@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "nodes": [
+    {
+      "id": "n1",
+      "type": "start",
+      "position": { "x": 0, "y": 120 },
+      "data": {
+        "label": "开始",
+        "config": {
+          "inputVariables": [
+            {
+              "name": "topic",
+              "type": "string",
+              "required": true,
+              "description": "本轮要处理的内容，例如一个算式或一个问题"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n2",
+      "type": "prompt",
+      "position": { "x": 240, "y": 120 },
+      "data": {
+        "label": "提示词",
+        "config": {
+          "role": "human",
+          "template": "请帮我算一下：{{input.topic}}"
+        }
+      }
+    },
+    {
+      "id": "n3",
+      "type": "llm",
+      "position": { "x": 480, "y": 120 },
+      "data": {
+        "label": "大模型",
+        "config": {
+          "system": "你是一个严谨的助手。需要做算术时，调用 calculator 工具，不要自己心算。",
+          "temperature": 0.2,
+          "tools": ["calculator"],
+          "maxSteps": 6,
+          "outputKey": "answer"
+        }
+      }
+    },
+    {
+      "id": "n4",
+      "type": "end",
+      "position": { "x": 720, "y": 120 },
+      "data": { "label": "结束", "config": { "outputKey": "answer" } }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "n1", "target": "n2" },
+    { "id": "e2", "source": "n2", "target": "n3" },
+    { "id": "e3", "source": "n3", "target": "n4" }
+  ]
+}
