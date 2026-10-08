@@ -9,12 +9,21 @@
  *
  * 现在入口只有一个，启动逻辑无条件执行，不再依赖任何启发式判断。
  */
-import { loadConfig, resolveModelMode } from './config.js';
+import { apiKeyEnvName, loadConfig, resolveModelMode } from './config.js';
+import { checkModelAvailability, reportPreflight } from './models/preflight.js';
 import { createRuntimeServer } from './server.js';
 
 const config = loadConfig();
 const mode = resolveModelMode(config);
 const server = createRuntimeServer(config);
+
+// 真实 provider 时做一次模型自检（不阻塞启动）：DeepSeek 的模型名会轮换，
+// 提前把可用列表打出来，比等到每次运行都 400 再去排查便宜得多。
+if (mode === 'live') {
+  void checkModelAvailability(config).then((result) => reportPreflight(config, result));
+} else if (config.model.provider !== 'scripted') {
+  console.warn(`[runtime] ${apiKeyEnvName(config)} 未设置，使用内置脚本化模型`);
+}
 
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
@@ -30,9 +39,6 @@ server.listen(config.port, config.host, () => {
     `[runtime] listening on http://${config.host}:${config.port}  ` +
       `model=${config.model.provider}/${config.model.name} mode=${mode}`,
   );
-  if (mode === 'scripted') {
-    console.log('[runtime] 未配置 API key：使用内置脚本化模型（填 runtime/.env 即可切到真实模型）');
-  }
 });
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

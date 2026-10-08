@@ -198,15 +198,18 @@ export class EventMapper {
     if (nodeId) {
       const inputTokens = usage.inputTokens ?? estimateTokens(JSON.stringify(raw.data?.['input'] ?? {}));
       const outputTokens = usage.outputTokens ?? estimateTokens(content);
+      // 模型没返回 usage 时降级为估算，并用一个**显式字段**告诉前端，
+      // 而不是把这件事编码进 model 显示名里（那样前端只能靠字符串匹配，很脆）。
       const estimated = usage.inputTokens === undefined;
       this.totals.llmCalls += 1;
       this.totals.inputTokens += inputTokens;
       this.totals.outputTokens += outputTokens;
       out.push(
         events.llmCompleted(this.runId, nodeId, {
-          model: this.modelName + (estimated ? ' (tokens 为估算)' : ''),
+          model: this.modelName,
           inputTokens,
           outputTokens,
+          estimated,
           messageCount: Array.isArray((raw.data?.['input'] as { messages?: unknown })?.messages)
             ? ((raw.data?.['input'] as { messages: unknown[] }).messages.length)
             : undefined,

@@ -145,11 +145,11 @@ describe('事件映射器：token 与模型调用', () => {
       outputTokens: 7,
       finishReason: 'stop',
     });
-    expect((events[0]?.payload as { model: string }).model).not.toContain('估算');
+    expect((events[0]?.payload as { estimated?: boolean }).estimated).toBe(false);
     expect(mapper.totals).toMatchObject({ llmCalls: 1, inputTokens: 11, outputTokens: 7 });
   });
 
-  it('没有 usage 时降级为估算，并在 model 字段里如实标注', () => {
+  it('没有 usage 时降级为估算，并用显式 estimated 字段标注（而不是靠字符串匹配）', () => {
     const mapper = makeMapper();
     mapper.map(chainStart('n3__model'));
     const events = mapper.map({
@@ -159,7 +159,7 @@ describe('事件映射器：token 与模型调用', () => {
       metadata: { langgraph_node: 'n3__model' },
       data: { input: { messages: [] }, output: { content: '一二三四五六七八' } },
     });
-    expect((events[0]?.payload as { model: string }).model).toContain('估算');
+    expect((events[0]?.payload as { estimated?: boolean }).estimated).toBe(true);
     expect((events[0]?.payload as { inputTokens: number }).inputTokens).toBeGreaterThan(0);
   });
 

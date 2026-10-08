@@ -25,11 +25,11 @@ services:
   runtime:
     build: ./runtime
     environment:
-      # 填上这三行即可切换为真实模型（不需要改任何代码）
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-scripted}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      MODEL_NAME: ${MODEL_NAME:-scripted-deterministic-v1}
+      # 平台统一使用 DeepSeek；不填 key 会自动降级为内置脚本化模型
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-deepseek}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MODEL_NAME: ${MODEL_NAME:-deepseek-flash}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
       TOOL_HTTP_ALLOWLIST: ${TOOL_HTTP_ALLOWLIST:-example.com,httpbin.org}
     ports:
       - "8090:8090"

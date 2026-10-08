@@ -120,7 +120,11 @@
             "outputTokens": { "type": "integer" },
             "messageCount": { "type": "integer" },
             "finishReason": { "type": "string" },
-            "durationMs": { "type": "number" }
+            "durationMs": { "type": "number" },
+            "estimated": {
+              "type": "boolean",
+              "description": "token 数是否由「4 字符≈1 token」估算得出（模型未返回 usage 时为 true）"
+            }
           }
         }
       }

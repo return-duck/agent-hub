@@ -19,7 +19,7 @@
 └──────────────┘                 └─────────┬──────────┘                   └──────────┬──────────┘
                                            │ JDBC                                    │
                                      ┌─────▼─────┐                          ┌────────▼────────┐
-                                     │ MySQL 8.4 │                          │ 模型 (可替换)     │
+                                     │ MySQL 8.4 │                          │ DeepSeek（统一）   │
                                      │  5 张表    │                          │ 工具 (白名单)     │
                                      └───────────┘                          └─────────────────┘
 ```
@@ -40,7 +40,7 @@
 
 | 验证项 | 命令 | 结果 |
 |---|---|---|
-| 三层测试 | `scripts/test.sh` | **97 个用例全绿**（runtime 60 · server 24 · web 13） |
+| 三层测试 | `scripts/test.sh` | **105 个用例全绿**（runtime 68 · server 24 · web 13） |
 | 端到端验收 | `scripts/e2e.sh` | **38/38 项通过**（冷启动 12 秒完成） |
 | 一条命令起全栈 | `scripts/dev.sh` | 4 个服务全部就绪，12 秒返回 |
 | 真实 MySQL 落库 | `bash scripts/db.sh app-cli -e "select ... " agent_stack` | `run_event` 54 行、`seq` 1..54 无重复 |
@@ -66,7 +66,8 @@ e2e 覆盖的真实事件流（54 条）被录制在 [`contracts/fixtures/events
 
 **每个目录自带 `package.json` / `pom.xml`、`.env.example`、`Dockerfile`、`README`，可单独安装、构建、部署**，刻意**不用 pnpm workspace** —— 部署 `web/` 不该先装根目录。
 
-安全边界：**API key 只存在于 `runtime/.env`**，server 只传模型名，浏览器只与 server 通信（单一 origin、单一 CORS 点）。
+安全边界：**API key 只存在于 `runtime/.env`**（部署时写入 `/opt/agent-stack/shared/runtime.env`，权限 600），
+server 只传模型名，浏览器只与 server 通信（单一 origin、单一 CORS 点）。
 
 ---
 
@@ -95,19 +96,38 @@ scripts/dev.sh
 
 停止：`scripts/stop.sh`（MySQL 保留）或 `scripts/stop.sh --all`。
 
-### 换成真实模型（零代码改动）
+### 模型：平台统一使用 DeepSeek
+
+**所有 agent 共用同一个平台配置的模型** —— 画布图里没有 provider / model / key 的任何痕迹，
+LLM 节点只配 `system` / `temperature` / `tools` / `maxSteps`，换模型只改 runtime 的环境变量，
+图和代码都不用动。运行时把实际生效的模型通过 `/healthz` 报给前端。
 
 ```bash
 cp runtime/.env.example runtime/.env
 # 编辑 runtime/.env：
-#   MODEL_PROVIDER=openai
-#   OPENAI_API_KEY=sk-xxxx
-#   OPENAI_BASE_URL=https://api.deepseek.com/v1     # 任意 OpenAI 兼容端点
-#   MODEL_NAME=deepseek-chat
+#   MODEL_PROVIDER=deepseek
+#   DEEPSEEK_API_KEY=sk-xxxx        # https://platform.deepseek.com/api_keys
+#   MODEL_NAME=deepseek-flash
 ```
+
+```bash
+cd runtime && npm run run-graph fixtures/graph-with-tools.json '{"topic":"(12+8)*3"}'
+# 会打印 model.mode=live 与真实模型返回的 token 用量
+```
+
+**模型名会轮换，所以启动时会自检**：`deepseek-chat` / `deepseek-reasoner` 是旧名，
+官方文档当前列出的是 [`deepseek-flash` / `deepseek-v4-pro`](https://api-docs.deepseek.com/)。
+启动时 runtime 会调一次 `/models` 并打印可用列表；如果 `MODEL_NAME` 不在列表里，
+日志会直接告诉你可选值 —— 而不是让你在每次运行都失败之后才去猜。
+（这个自检不阻塞启动，接口不可用时只告警。）
 
 没填 key 时不会报错，而是降级到内置的**确定性脚本化模型**（`mode=scripted`，前端顶部有横幅提示）。
 这样"能不能跑起来"永远不取决于有没有 key —— 也让 CI 可以零凭证地验证整条链路。
+
+DeepSeek 走官方 [`@langchain/deepseek`](https://www.npmjs.com/package/@langchain/deepseek) 的 `ChatDeepSeek`，
+它继承自 `ChatOpenAICompletions`，因此 token 级流式回调与 `bindTools` 都由基类正确实现；
+另外它原生处理 `reasoning_content`，并且开着 `stream_options.include_usage`，
+所以前端显示的是**真实 token 用量**而不是估算值（模型没返回 usage 时才回退到估算，并明确标注）。
 
 ---
 
@@ -181,7 +201,7 @@ agent-stack/
 ├── runtime/                         # agent 运行（独立部署）
 │   ├── src/compiler/                #   validate / template / state / compile / nodes
 │   ├── src/events/mapper.ts         #   LangChain 回调 → 协议事件（纯函数）
-│   ├── src/models/                  #   模型工厂 + 确定性脚本化模型
+│   ├── src/models/                  #   模型工厂（DeepSeek 优先）+ 启动自检 + 确定性脚本化模型
 │   ├── src/tools/                   #   calculator（手写求值器，无 eval）/ http_get（白名单）
 │   ├── src/generated/               #   契约产物（自动生成，勿手改）
 │   ├── scripts/spike.ts             #   LangChain API 取证实录
@@ -208,7 +228,7 @@ agent-stack/
 
 | 层 | 位置 | 覆盖重点 |
 |---|---|---|
-| 单元 | `runtime/test`（Vitest，60） | 图校验 11 条规则、模板渲染、事件映射（**含回归**）、计算器安全性、完整 run 的事件不变量 |
+| 单元 | `runtime/test`（Vitest，68） | 图校验 11 条规则、模板渲染、事件映射（**含回归**）、计算器安全性、完整 run 的事件不变量 |
 | 单元 | `web/test`（Vitest，13） | `runReducer` 全部迁移 + **回放真实录制事件流** |
 | 单元 | `server/src/test`（JUnit，10） | SSE 通道订阅/回放/判重、`Last-Event-ID` 解析、事件契约 |
 | 集成 | `server/src/test`（JUnit，14） | **真实 MySQL** 上的 Flyway / 存取往返 / 编排 / 终态收敛（用桩 runtime 精确构造失败场景） |

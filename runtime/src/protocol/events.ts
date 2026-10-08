@@ -57,6 +57,8 @@ export const events = {
       messageCount?: number;
       finishReason?: string;
       durationMs?: number;
+      /** token 数是否为估算（模型未返回 usage）—— 前端据此决定要不要提示"估算" */
+      estimated?: boolean;
     },
   ): OutboundEvent {
     return { type: 'llm.completed', runId, nodeId, ts: now(), payload: { ...info } };

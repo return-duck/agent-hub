@@ -53,6 +53,8 @@ export interface RunState {
   error: { code: string; message: string; retryable?: boolean } | null;
   durationMs: number | null;
   usage: { inputTokens: number; outputTokens: number; llmCalls: number } | null;
+  /** 本次 run 里是否有模型没返回 usage（前端据此决定要不要提示"估算"） */
+  usageEstimated: boolean;
 }
 
 export const initialRunState: RunState = {
@@ -66,6 +68,7 @@ export const initialRunState: RunState = {
   error: null,
   durationMs: null,
   usage: null,
+  usageEstimated: false,
 };
 
 let messageCounter = 0;
@@ -110,6 +113,7 @@ export function reduceRunEvent(state: RunState, event: ProtocolEvent): RunState 
           outputTokens: previous.outputTokens + (event.payload.outputTokens ?? 0),
           llmCalls: previous.llmCalls + 1,
         },
+        usageEstimated: state.usageEstimated || event.payload.estimated === true,
       };
     }
 

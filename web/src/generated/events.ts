@@ -82,6 +82,10 @@ export interface LlmCompleted {
     messageCount?: number;
     finishReason?: string;
     durationMs?: number;
+    /**
+     * token 数是否由「4 字符≈1 token」估算得出（模型未返回 usage 时为 true）
+     */
+    estimated?: boolean;
   };
 }
 export interface ToolStarted {

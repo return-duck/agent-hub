@@ -122,7 +122,7 @@ function RunSummary() {
         </span>
       )}
       {run.totals && <span>工具 {run.totals.toolCalls} 次 · 超级步 {run.totals.steps}</span>}
-      {run.usage && <span className="muted">tokens 为估算值</span>}
+      {run.usage && run.usageEstimated && <span className="muted">tokens 为估算值</span>}
     </div>
   );
 }

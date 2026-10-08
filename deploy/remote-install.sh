@@ -205,10 +205,12 @@ ENV
 cat > "$APP_DIR/shared/runtime.env" <<ENV
 RUNTIME_HOST=127.0.0.1
 RUNTIME_PORT=$RUNTIME_PORT
-MODEL_PROVIDER=$MODEL_PROVIDER
-OPENAI_API_KEY=${OPENAI_API_KEY:-}
-OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+MODEL_PROVIDER=${MODEL_PROVIDER:-deepseek}
+DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
 MODEL_NAME=${MODEL_NAME:-}
+MODEL_BASE_URL=${MODEL_BASE_URL:-}
+MODEL_EXTRA_PARAMS=${MODEL_EXTRA_PARAMS:-}
+MODEL_TEMPERATURE=${MODEL_TEMPERATURE:-0.2}
 TOOL_HTTP_ALLOWLIST=${TOOL_HTTP_ALLOWLIST:-example.com,httpbin.org}
 ENV
 
@@ -273,7 +275,7 @@ if [ "$FAILED" -eq 0 ]; then
   echo "  应用目录   $APP_DIR"
   echo "  当前版本   $(basename "$(readlink -f "$APP_DIR/current")")"
   echo "  访问地址   http://<公网IP>:$APP_PORT"
-  echo "  模型模式   $MODEL_PROVIDER"
+  echo "  模型       ${MODEL_NAME:-默认} (provider=$MODEL_PROVIDER)"
   echo
   echo "  提醒：阿里云【安全组】需要放行 TCP $APP_PORT（它独立于系统防火墙）。"
 else
