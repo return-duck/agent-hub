@@ -1,6 +1,9 @@
 /**
  * 运行时 HTTP 服务（Node 内置 http，无 Web 框架依赖）。
  *
+ * 这里只导出 createRuntimeServer；进程启动逻辑在 main.ts（见那里的注释，
+ * 解释为什么不在这里做"是否被直接执行"的判断）。
+ *
  * 端点很少，是因为职责被刻意收窄：
  *   POST /execute   接收一次 run，以 NDJSON 逐行回吐协议事件
  *   GET  /healthz   就绪情况 + 实际生效的模型模式（前端据此显示"脚本化模型"横幅）
@@ -126,22 +129,5 @@ function readBody(req: IncomingMessage): Promise<string> {
     });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
-  });
-}
-
-const isMain = process.argv[1] !== undefined && import.meta.url === `file://${process.argv[1]}`;
-if (isMain) {
-  const config = loadConfig();
-  const mode = resolveModelMode(config);
-  const server = createRuntimeServer(config);
-  server.listen(config.port, config.host, () => {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[runtime] listening on http://${config.host}:${config.port}  model=${config.model.provider}/${config.model.name} mode=${mode}`,
-    );
-    if (mode === 'scripted') {
-      // eslint-disable-next-line no-console
-      console.log('[runtime] 未配置 API key：使用内置脚本化模型（填 runtime/.env 即可切到真实模型）');
-    }
   });
 }

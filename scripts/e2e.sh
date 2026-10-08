@@ -24,7 +24,7 @@ if [ "$NO_START" -eq 0 ]; then
 
   if ! port_open 8090; then
     info "启动 runtime :8090 ..."
-    start_detached "$ROOT/runtime" "$LOG_DIR/runtime.log" npx tsx src/server.ts
+    start_detached "$ROOT/runtime" "$LOG_DIR/runtime.log" npx tsx src/main.ts
     wait_port 8090 60 runtime || { tail -20 "$LOG_DIR/runtime.log"; exit 1; }
   fi
 

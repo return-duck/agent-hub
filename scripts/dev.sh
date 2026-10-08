@@ -20,7 +20,7 @@ info "2/4 启动 runtime (Node + LangChain) :8090 ..."
 if port_open 8090; then
   warn "8090 已在监听，跳过"
 else
-  start_detached "$ROOT/runtime" "$LOG_DIR/runtime.log" npx tsx src/server.ts
+  start_detached "$ROOT/runtime" "$LOG_DIR/runtime.log" npx tsx src/main.ts
   wait_port 8090 60 runtime || { tail -20 "$LOG_DIR/runtime.log"; exit 1; }
 fi
 

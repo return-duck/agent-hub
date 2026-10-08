@@ -230,19 +230,89 @@ agent-stack/
 
 ---
 
-## 部署
+## 部署到阿里云 ECS（单机，IP + 高位端口）
 
-每个目录都有 `Dockerfile`，根目录有 `docker-compose.yml` 把四件事（MySQL + runtime + server + web）串起来：
+`deploy/` 下是一套完整的部署脚本。设计前提：**产物在本机构建，服务器上不需要 JDK / Maven / npm** ——
+三个产物都与架构无关（jar 是字节码、dist 是 JS、web/dist 是静态文件），
+这顺带绕开了服务器拉 Maven Central / npm 慢的问题。
 
 ```bash
-docker compose up --build          # 起 MySQL + runtime + server + web
+# 1. 填配置（已被 .gitignore 忽略，不会进版本库）
+cp deploy/deploy.env.example deploy/deploy.env
+vi deploy/deploy.env          # 公网 IP / SSH 用户 / 端口 / MySQL 管理员密码 / 库名
+
+# 2. 一条命令：本机构建 → 打包上传 → 服务器安装并重启
+bash deploy/deploy.sh
 ```
 
-> ⚠️ **诚实声明**：本项目的开发与验证环境**没有 Docker**，因此这三个 Dockerfile 与 compose 文件
-> **只经过人工审查，未经实际构建验证**。已验证的是它们在非容器形态下对应的启动方式（`scripts/dev.sh`）。
-> 首次在服务器上使用 compose 时，请预留调试时间。
+部署脚本会做这些事（**可重复执行，幂等**）：
 
-生产形态建议：`web/dist` 交给静态服务器（nginx/CDN）并把 `/api` 反代到 server；server 与 runtime 仅在内网互通；MySQL 使用托管实例并把 `AGENT_STACK_DB_*` 指过去。
+| 阶段 | 行为 |
+|---|---|
+| 本地构建 | `vite build` → `tsc` → `mvn clean package -Pwith-web`（前端打进 jar） |
+| 组装上传 | 生成 `release/`（jar + runtime dist + 依赖清单 + systemd 模板），tar over ssh 传到服务器 |
+| 装运行时 | 若无 JRE/Node，按 CPU 架构下载官方包到 `$APP_DIR/.toolchain`（**不依赖包管理器**，Node 走 npmmirror 镜像，失败自动回退官方源） |
+| 装依赖 | 服务器上 `npm ci --omit=dev`（只装运行时依赖，比上传 node_modules 干净） |
+| 原子发布 | 建 `releases/<时间戳>/`，`current` 软链指过去；只保留最近 5 个版本 |
+| 建库建号 | `CREATE DATABASE IF NOT EXISTS` + 专用账号，**只授权这一个 schema**；表结构由 server 启动时 Flyway 自动建 |
+| 托管服务 | 写 systemd 单元（以非 root 的 `agentstack` 系统用户运行），`enable --now` |
+| 健康检查 | 轮询 `/healthz` 与 `/actuator/health`，失败自动打印最后 30 行日志 |
+
+**单端口**：默认把 `web/dist` 打进 jar，所以一个端口同时提供 UI 与 API ——
+单一 origin、无需 CORS、无需 nginx、安全组只需放行一个端口。
+想让前端独立部署（CDN/nginx）就把 `SERVE_WEB=false`，并用 [web/nginx.conf](web/nginx.conf) 托管。
+
+### 部署前必须知道的三件事
+
+1. **安全组是独立的一层**。阿里云控制台 → 实例 → 安全组 → 入方向，放行 `TCP <APP_PORT>`（默认 8081）。
+   只改服务器系统防火墙（firewalld/iptables）**不会**生效；脚本会在检测到 firewalld 时给出确切的放行命令。
+2. **大陆地域的 80/443 需要 ICP 备案**，未备案会被运营商拦截。所以默认用 8081 这类高位端口，直接 `http://公网IP:8081` 访问。
+3. **建议至少 2GB 内存**。脚本会探测内存，低于 1.8GB 时告警；JVM 用 `-XX:MaxRAMPercentage=60` 自适应，
+   并带 `ExitOnOutOfMemoryError`，OOM 时干脆退出让 systemd 重启而不是僵死。
+
+### 服务器上常用命令
+
+```bash
+systemctl status agent-stack-server agent-stack-runtime
+journalctl -u agent-stack-server -f          # 应用日志
+journalctl -u agent-stack-runtime -f         # runtime 日志
+ls -l /opt/agent-stack/current               # 当前生效的版本
+ls -1 /opt/agent-stack/releases              # 历史版本（回滚：把 current 软链指回去再 restart）
+```
+
+### 已验证 / 未验证的边界（重要）
+
+| 项 | 状态 |
+|---|---|
+| 三个产物能独立启动（`java -jar`、`node dist/main.js`、静态资源） | ✅ 本机实测 |
+| 单端口 jar 同时提供 UI（`/`、`/assets/*`）与 API（`/api/*`） | ✅ 本机实测 |
+| 软链部署布局（`current` → `releases/<stamp>`）下 runtime 能正常启动 | ✅ 本机实测（这个布局查出过一个真 bug，见下） |
+| 本地构建 + 组装 `release/` 完整跑通 | ✅ 实测（57MB，jar 内含前端） |
+| systemd 模板渲染无残留占位符 | ✅ 实测 |
+| **`deploy.sh` 对真实 ECS 的端到端执行** | ⚠️ **未验证**（我没有你的服务器）。脚本写得很保守（每步都有明确报错 + 健康检查 + 日志回显），但首次执行请留意输出 |
+| **Docker 镜像构建** | ⚠️ 未验证（开发环境没有 Docker），见文末的 Docker 段落 |
+
+### 一个被部署布局查出来的真 bug
+
+runtime 原先在 `server.ts` 底部用 `import.meta.url === file://${process.argv[1]}` 判断"是否被直接执行"。
+但部署是通过 `current/` 软链启动的，**Node 会把主模块解析成 realpath**，于是两者永不相等 ——
+表现为**进程活着但完全不监听**，而且没有任何报错，在服务器上极难排查。
+
+本机用真实软链布局复现后，改成独立的 `src/main.ts` 入口无条件启动，不再依赖任何启发式判断
+（`runtime/src/main.ts` 里有注释说明，systemd 单元注释里也标了）。
+
+### 备选：Docker Compose
+
+根目录有 `docker-compose.yml`，把 MySQL + runtime + server + web 串起来：
+
+```bash
+docker compose up --build
+```
+
+> ⚠️ 三个 `Dockerfile` 与 compose 文件**未经实际构建验证**（开发环境没有 Docker），只经人工审查。
+> 国内拉 Docker Hub 镜像通常需要先配阿里云容器镜像加速器。
+> 非容器形态的启动方式（`scripts/dev.sh`、`deploy/deploy.sh`）是已经实际验证过的路径。
+
 
 ---
 

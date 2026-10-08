@@ -1,4 +1,5 @@
 export { createRuntimeServer } from './server.js';
+export { loadConfig as loadRuntimeConfig } from './config.js';
 export { executeRun, type RunRequest, type RunOutcome } from './executor/run.js';
 export { loadConfig, resolveModelMode, type RuntimeConfig } from './config.js';
 export { compileGraph, type CompiledAgent } from './compiler/compile.js';
