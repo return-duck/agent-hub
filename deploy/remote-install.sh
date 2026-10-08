@@ -68,7 +68,8 @@ find_system_java() {
     [ -x "$bin" ] && candidates+=("$bin")
   done
   for bin in "${candidates[@]}"; do
-    major="$("$bin" -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+    # || true：候选 java 可能是坏软链，java -version 失败不能拖垮整个脚本
+    major="$("$bin" -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/' || true)"
     if [ -n "$major" ] && [ "$major" -ge "$JDK_MAJOR" ] 2>/dev/null; then
       printf '%s' "$bin"
       return 0
@@ -79,11 +80,13 @@ find_system_java() {
 
 # 从 Adoptium 风格的镜像目录列表里找最新的 JRE 包
 try_jre_mirror() { # try_jre_mirror <镜像根地址>
+  # 末尾的 || true 是必需的：set -e + pipefail 下，管道（grep 没匹配到）失败会让
+  # 整个脚本退出，而不是"换下一个镜像试"。这个陷阱本机复现过。
   local base="$1" dir file
   dir="$base/$JDK_MAJOR/jre/$ARCH_ADOPTIUM/linux/"
   file="$(curl -fsSL --max-time 30 "$dir" 2>/dev/null \
     | grep -oE "OpenJDK${JDK_MAJOR}U-jre_${ARCH_ADOPTIUM}_linux_hotspot_[0-9._]+\.tar\.gz" \
-    | sort -V | tail -1)"
+    | sort -V | tail -1 || true)"
   [ -n "$file" ] || return 1
   info "    用镜像: $dir$file"
   download "$dir$file" "$TMP/jre.tar.gz"
@@ -152,7 +155,7 @@ else
     2) 手工下载 JRE 压缩包，解压后把 bin/java 所在目录放到 $JRE_DIR（使 $JRE_DIR/bin/java 存在）"
 
   mkdir -p "$TMP/jre" && tar -xzf "$TMP/jre.tar.gz" -C "$TMP/jre"
-  inner="$(find "$TMP/jre" -maxdepth 1 -mindepth 1 -type d -name '*jdk*' | head -1)"
+  inner="$(find "$TMP/jre" -maxdepth 1 -mindepth 1 -type d -name '*jdk*' | head -1 || true)"
   [ -n "$inner" ] || die "JRE 压缩包结构异常"
   rm -rf "$JRE_DIR" && mv "$inner" "$JRE_DIR"
   JAVA_BIN="$JRE_DIR/bin/java"
@@ -176,7 +179,7 @@ else
   done
   [ "$downloaded" -eq 1 ] || die "Node 下载失败（可手工下载解压到 $NODE_DIR）"
   mkdir -p "$TMP/node" && tar -xzf "$TMP/node.tar.gz" -C "$TMP/node"
-  inner="$(find "$TMP/node" -maxdepth 1 -mindepth 1 -type d -name 'node-*' | head -1)"
+  inner="$(find "$TMP/node" -maxdepth 1 -mindepth 1 -type d -name 'node-*' | head -1 || true)"
   [ -n "$inner" ] || die "Node 压缩包结构异常"
   rm -rf "$NODE_DIR" && mv "$inner" "$NODE_DIR"
   ok "    Node 就绪：$("$NODE_DIR/bin/node" -v)  npm $("$NODE_DIR/bin/npm" -v)"
@@ -235,10 +238,11 @@ ok "    当前版本 -> $REL"
 
 # 只保留最近 5 个版本，避免磁盘被日志/旧包撑满
 KEEP=5
-ls -1dt "$APP_DIR"/releases/*/ 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
+( ls -1dt "$APP_DIR"/releases/*/ 2>/dev/null || true ) | tail -n +$((KEEP + 1)) | while read -r old; do
+  [ -n "$old" ] || continue
   info "    清理旧版本 $(basename "$old")"
   rm -rf "$old"
-done
+done || true
 
 # --------------------------------------------------------------- 6. 建库建号
 info "6/8 创建 schema 与专用账号（幂等）..."
