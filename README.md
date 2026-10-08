@@ -287,8 +287,10 @@ bash deploy/deploy.sh
 1. **安全组是独立的一层**。阿里云控制台 → 实例 → 安全组 → 入方向，放行 `TCP <APP_PORT>`（默认 8081）。
    只改服务器系统防火墙（firewalld/iptables）**不会**生效；脚本会在检测到 firewalld 时给出确切的放行命令。
 2. **大陆地域的 80/443 需要 ICP 备案**，未备案会被运营商拦截。所以默认用 8081 这类高位端口，直接 `http://公网IP:8081` 访问。
-3. **建议至少 2GB 内存**。脚本会探测内存，低于 1.8GB 时告警；JVM 用 `-XX:MaxRAMPercentage=60` 自适应，
-   并带 `ExitOnOutOfMemoryError`，OOM 时干脆退出让 systemd 重启而不是僵死。
+3. **建议至少 2GB 内存**。脚本按内存的 **1/3** 计算 JVM 堆（夹在 256MB–2GB，并在部署输出里打印实际值）——
+   刻意**不用** `MaxRAMPercentage`：它只看机器总内存，不知道同机还跑着 MySQL 和 Node，
+   1.6GB 的规格上会算出 ~1GB 堆，然后被 OOM Killer 干掉。堆之外还带 `ExitOnOutOfMemoryError`，
+   内存不足时干脆退出让 systemd 重启，而不是僵死。内存实在紧张就把 MySQL 换成阿里云 RDS（改 `DB_HOST` 即可）。
 
 ### 服务器上常用命令
 

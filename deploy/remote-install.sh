@@ -41,12 +41,52 @@ if command -v curl >/dev/null 2>&1; then DOWNLOADER="curl"
 elif command -v wget >/dev/null 2>&1; then DOWNLOADER="wget"
 else die "服务器上既没有 curl 也没有 wget，请先安装其中之一"; fi
 
+# 下载并显示进度。
+#
+# 关键：必须有「卡死检测」和「整体超时」。之前的版本只设了 connect-timeout，
+# 结果在连得上但对端不传数据时会无限期挂住 —— 在 ECS 上表现为"脚本卡在这里不动"，
+# 既没有报错也没有进展（api.adoptium.net 从国内拉就是这个症状）。
+#   --speed-limit 10K --speed-time 30  连续 30 秒低于 10KB/s 就放弃
+#   --max-time 900                     整体上限，防止慢速拖死
 download() { # download <url> <outfile>
+  local url="$1" out="$2"
   if [ "$DOWNLOADER" = "curl" ]; then
-    curl -fsSL --retry 3 --connect-timeout 20 -o "$2" "$1"
+    curl -fL --retry 2 --retry-delay 2 --connect-timeout 15 \
+      --speed-limit 10240 --speed-time 30 --max-time 900 \
+      --progress-bar -o "$out" "$url"
   else
-    wget -q --tries=3 --timeout=20 -O "$2" "$1"
+    wget --tries=2 --timeout=15 --show-progress -O "$out" "$url"
   fi
+}
+
+# 找一个已经装好的 Java（>= JDK_MAJOR）。
+# 有系统 Java 就完全不用下载 —— 在有包管理器镜像的国内机器上这是最稳的路径。
+find_system_java() {
+  local candidates=() bin major
+  command -v java >/dev/null 2>&1 && candidates+=("$(command -v java)")
+  for bin in /usr/lib/jvm/*/bin/java /usr/lib/jvm/*/jre/bin/java /opt/java/*/bin/java; do
+    [ -x "$bin" ] && candidates+=("$bin")
+  done
+  for bin in "${candidates[@]}"; do
+    major="$("$bin" -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+    if [ -n "$major" ] && [ "$major" -ge "$JDK_MAJOR" ] 2>/dev/null; then
+      printf '%s' "$bin"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# 从 Adoptium 风格的镜像目录列表里找最新的 JRE 包
+try_jre_mirror() { # try_jre_mirror <镜像根地址>
+  local base="$1" dir file
+  dir="$base/$JDK_MAJOR/jre/$ARCH_ADOPTIUM/linux/"
+  file="$(curl -fsSL --max-time 30 "$dir" 2>/dev/null \
+    | grep -oE "OpenJDK${JDK_MAJOR}U-jre_${ARCH_ADOPTIUM}_linux_hotspot_[0-9._]+\.tar\.gz" \
+    | sort -V | tail -1)"
+  [ -n "$file" ] || return 1
+  info "    用镜像: $dir$file"
+  download "$dir$file" "$TMP/jre.tar.gz"
 }
 
 # --------------------------------------------------------------- 1. 环境探测
@@ -58,9 +98,20 @@ case "$(uname -m)" in
 esac
 MEM_MB=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1024 ))
 info "    架构=$(uname -m)  内存=${MEM_MB}MB  系统=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo unknown)"
+# JVM 堆按内存取 1/3 并夹在 256MB..2GB，取整到 128 的倍数。
+# 之所以不是 MaxRAMPercentage：它按机器总内存算，不知道这台机器上还有 MySQL 与 Node，
+# 1674MB 这种规格上会算出 ~1GB 堆，很容易被 OOM Killer 干掉。
+JVM_HEAP_MB=$(( MEM_MB / 3 ))
+[ "$JVM_HEAP_MB" -lt 256 ] && JVM_HEAP_MB=256
+[ "$JVM_HEAP_MB" -gt 2048 ] && JVM_HEAP_MB=2048
+JVM_HEAP_MB=$(( (JVM_HEAP_MB / 128) * 128 ))
+JAVA_OPTS="-Xms${JVM_HEAP_MB}m -Xmx${JVM_HEAP_MB}m -XX:MaxMetaspaceSize=192m -Duser.timezone=UTC"
+info "    JVM 堆: ${JVM_HEAP_MB}MB（按内存 ${MEM_MB}MB 的 1/3 计算，给 MySQL 与 Node 留余量）"
+
 if [ "$MEM_MB" -lt 1800 ]; then
-  warn "内存只有 ${MEM_MB}MB：Spring Boot + Node 会比较紧张，建议至少 2GB。"
-  warn "如果启动失败，请先看 journalctl -u agent-stack-server -n 100"
+  warn "内存只有 ${MEM_MB}MB：Spring Boot + Node + MySQL 挤在一起会比较紧张。"
+  warn "如果服务反复重启，先看： journalctl -u agent-stack-server -n 100 | grep -i -E 'kill|memory'"
+  warn "实在不够就把 MySQL 换成阿里云 RDS（DB_HOST 指过去即可），或升配到 2GB。"
 fi
 
 command -v mysql >/dev/null 2>&1 || die "找不到 mysql 客户端。请先安装：
@@ -73,31 +124,55 @@ mkdir -p "$APP_DIR/.toolchain" "$APP_DIR/shared" "$APP_DIR/logs" "$APP_DIR/relea
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# --- Java：优先复用，其次国内镜像，最后官方源 ---
 JRE_DIR="$APP_DIR/.toolchain/jre"
+JAVA_BIN=""
 if [ -x "$JRE_DIR/bin/java" ]; then
-  ok "    JRE 已存在：$("$JRE_DIR/bin/java" -version 2>&1 | head -1)"
+  JAVA_BIN="$JRE_DIR/bin/java"
+  ok "    复用已下载的 JRE：$("$JAVA_BIN" -version 2>&1 | head -1)"
+elif JAVA_BIN="$(find_system_java)"; then
+  ok "    复用系统已安装的 Java（无需下载）：$JAVA_BIN"
+  info "    $("$JAVA_BIN" -version 2>&1 | head -1)"
 else
-  JRE_URL="https://api.adoptium.net/v3/binary/latest/${JDK_MAJOR}/ga/linux/${ARCH_ADOPTIUM}/jre/hotspot/normal/eclipse"
-  info "    下载 JRE: $JRE_URL"
-  download "$JRE_URL" "$TMP/jre.tar.gz" || die "JRE 下载失败（网络不通？可手工下载后放到 $JRE_DIR）"
+  info "    未找到可用的 Java，开始下载 JRE $JDK_MAJOR（$ARCH_ADOPTIUM）..."
+  jre_ok=0
+  for mirror in "${JDK_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/Adoptium}" "https://mirrors.ustc.edu.cn/adoptium" ; do
+    if try_jre_mirror "$mirror"; then jre_ok=1; break; fi
+    warn "    镜像不可用: $mirror"
+  done
+  if [ "$jre_ok" -ne 1 ]; then
+    warn "    镜像都不可用，尝试官方源（国内可能很慢/超时）..."
+    if download "https://api.adoptium.net/v3/binary/latest/${JDK_MAJOR}/ga/linux/${ARCH_ADOPTIUM}/jre/hotspot/normal/eclipse" "$TMP/jre.tar.gz"; then
+      jre_ok=1
+    fi
+  fi
+  [ "$jre_ok" -eq 1 ] || die "JRE 下载失败。两个办法：
+    1) 用系统包管理器装（最快）：  dnf install -y java-${JDK_MAJOR}-openjdk-headless
+       然后重新执行本脚本，它会自动复用系统 Java；
+    2) 手工下载 JRE 压缩包，解压后把 bin/java 所在目录放到 $JRE_DIR（使 $JRE_DIR/bin/java 存在）"
+
   mkdir -p "$TMP/jre" && tar -xzf "$TMP/jre.tar.gz" -C "$TMP/jre"
-  inner="$(find "$TMP/jre" -maxdepth 1 -mindepth 1 -type d -name 'jdk-*' | head -1)"
+  inner="$(find "$TMP/jre" -maxdepth 1 -mindepth 1 -type d -name '*jdk*' | head -1)"
   [ -n "$inner" ] || die "JRE 压缩包结构异常"
   rm -rf "$JRE_DIR" && mv "$inner" "$JRE_DIR"
-  ok "    JRE 就绪：$("$JRE_DIR/bin/java" -version 2>&1 | head -1)"
+  JAVA_BIN="$JRE_DIR/bin/java"
+  ok "    JRE 就绪：$("$JAVA_BIN" -version 2>&1 | head -1)"
 fi
+[ -x "$JAVA_BIN" ] || die "Java 可执行文件不可用: $JAVA_BIN"
 
+# --- Node ---
 NODE_DIR="$APP_DIR/.toolchain/node"
 if [ -x "$NODE_DIR/bin/node" ]; then
-  ok "    Node 已存在：$("$NODE_DIR/bin/node" -v)"
+  ok "    复用已下载的 Node：$("$NODE_DIR/bin/node" -v)"
 else
   # 用 .tar.gz 而不是 .tar.xz：精简系统上常常没有 xz
   NODE_TARBALL="node-${NODE_VERSION}-linux-${ARCH_NODE}.tar.gz"
+  info "    下载 Node $NODE_VERSION（$ARCH_NODE）..."
   downloaded=0
   for base in "$NODE_MIRROR" "https://nodejs.org/dist"; do
-    info "    尝试下载 Node: $base/$NODE_VERSION/$NODE_TARBALL"
+    info "      源: $base"
     if download "$base/$NODE_VERSION/$NODE_TARBALL" "$TMP/node.tar.gz"; then downloaded=1; break; fi
-    warn "    该源不可用，换下一个"
+    warn "      该源不可用，换下一个"
   done
   [ "$downloaded" -eq 1 ] || die "Node 下载失败（可手工下载解压到 $NODE_DIR）"
   mkdir -p "$TMP/node" && tar -xzf "$TMP/node.tar.gz" -C "$TMP/node"
@@ -129,12 +204,17 @@ SERVER_MAJOR="${SERVER_VERSION%%.*}"
 [ "$SERVER_MAJOR" -ge 8 ] 2>/dev/null || die "需要 MySQL 8.x，当前是 $SERVER_VERSION"
 
 # --------------------------------------------------------------- 4. 安装 runtime 依赖
-info "4/8 安装 runtime 依赖（npm ci --omit=dev）..."
+info "4/8 安装 runtime 依赖（npm ci --omit=dev，约 150MB，可能需要几分钟）..."
 (
   cd "$INCOMING/runtime"
   # 先清理本地构建可能带上的 devDependencies
   rm -rf node_modules
-  "$NODE_DIR/bin/npm" ci --omit=dev --no-audit --no-fund --registry="$NPM_REGISTRY" >/dev/null 2>&1 \
+  # 刻意【不】把输出丢到 /dev/null：npm 装 150MB 依赖要几分钟，
+  # 静默会让人以为脚本卡死（下载 JRE 那次就是这么被误判的）。
+  # 同时设 fetch-timeout，避免镜像不响应时无限期挂住。
+  "$NODE_DIR/bin/npm" ci --omit=dev --no-audit --no-fund \
+    --fetch-timeout=60000 --fetch-retries=2 \
+    --registry="$NPM_REGISTRY" \
     || die "npm ci 失败。可改用官方源重试： NPM_REGISTRY=https://registry.npmjs.org"
 )
 ok "    runtime 依赖就绪（$(du -sh "$INCOMING/runtime/node_modules" | cut -f1)）"
@@ -223,6 +303,8 @@ render_unit() { # render_unit <模板> <目标>
       -e "s|__APP_PORT__|$APP_PORT|g" \
       -e "s|__RUNTIME_PORT__|$RUNTIME_PORT|g" \
       -e "s|__RUN_USER__|$RUN_USER|g" \
+      -e "s|__JAVA_BIN__|$JAVA_BIN|g" \
+      -e "s|__JAVA_OPTS__|$JAVA_OPTS|g" \
       "$1" > "$2"
   chmod 644 "$2"
 }
@@ -276,6 +358,8 @@ if [ "$FAILED" -eq 0 ]; then
   echo "  当前版本   $(basename "$(readlink -f "$APP_DIR/current")")"
   echo "  访问地址   http://<公网IP>:$APP_PORT"
   echo "  模型       ${MODEL_NAME:-默认} (provider=$MODEL_PROVIDER)"
+  echo "  Java       $JAVA_BIN"
+  echo "  Node       $NODE_BIN"
   echo
   echo "  提醒：阿里云【安全组】需要放行 TCP $APP_PORT（它独立于系统防火墙）。"
 else

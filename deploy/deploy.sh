@@ -48,6 +48,7 @@ done
 : "${SERVE_WEB:=true}"
 : "${NODE_VERSION:=v22.12.0}"
 : "${JDK_MAJOR:=21}"
+: "${JDK_MIRROR:=https://mirrors.tuna.tsinghua.edu.cn/Adoptium}"
 : "${NODE_MIRROR:=https://npmmirror.com/mirrors/node}"
 : "${NPM_REGISTRY:=https://registry.npmmirror.com}"
 
@@ -136,6 +137,7 @@ MODEL_TEMPERATURE=${MODEL_TEMPERATURE:-0.2}
 TOOL_HTTP_ALLOWLIST=${TOOL_HTTP_ALLOWLIST:-}
 
 JDK_MAJOR=$JDK_MAJOR
+JDK_MIRROR=${JDK_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/Adoptium}
 NODE_VERSION=$NODE_VERSION
 NODE_MIRROR=$NODE_MIRROR
 NPM_REGISTRY=$NPM_REGISTRY

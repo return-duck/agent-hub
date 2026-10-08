@@ -13,10 +13,11 @@ WorkingDirectory=__APP_DIR__/current
 # 数据库密码等敏感项放在这个文件里（权限 600，属主 __RUN_USER__）
 EnvironmentFile=__APP_DIR__/shared/server.env
 
-# MaxRAMPercentage 会让 JVM 按机器内存自适应，比写死 -Xmx 更适合不同规格的 ECS；
-# ExitOnOutOfMemoryError 让小内存机器 OOM 时干脆退出并被 systemd 重启，而不是僵死。
-ExecStart=__APP_DIR__/.toolchain/jre/bin/java \
-    -XX:MaxRAMPercentage=60 \
+# 堆大小由安装脚本按机器内存算好后注入（不用 MaxRAMPercentage：
+# 它只看机器总内存，不知道这台机器上还跑着 MySQL，小规格 ECS 上会算得过大而被 OOM Kill）。
+# ExitOnOutOfMemoryError 让内存不足时干脆退出并被 systemd 重启，而不是僵死。
+ExecStart=__JAVA_BIN__ \
+    __JAVA_OPTS__ \
     -XX:+ExitOnOutOfMemoryError \
     -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=__APP_DIR__/logs \
     -jar __APP_DIR__/current/agent-stack-server.jar
