@@ -41,11 +41,14 @@
 | 验证项 | 命令 | 结果 |
 |---|---|---|
 | 三层测试 | `scripts/test.sh` | **97 个用例全绿**（runtime 60 · server 24 · web 13） |
-| 端到端验收 | `scripts/e2e.sh` | **38/38 项通过** |
+| 端到端验收 | `scripts/e2e.sh` | **38/38 项通过**（冷启动 12 秒完成） |
+| 一条命令起全栈 | `scripts/dev.sh` | 4 个服务全部就绪，12 秒返回 |
 | 真实 MySQL 落库 | `bash scripts/db.sh app-cli -e "select ... " agent_stack` | `run_event` 54 行、`seq` 1..54 无重复 |
 | 真实工具调用 | e2e 断言 | `calculator` 算出 `(12+8)*3 = 60`，`isError=false` |
+| 浏览器路径 | 经 Vite 代理 `:5173/api/...` 发起 run | 54 条事件、38 条 token 事件、`SUCCEEDED`、`(7+3)*6 = 60` |
 | 断点续传 | e2e 断言 | `?afterSeq=50` 恰好返回 seq 51–54 |
 | 失败收敛 | e2e 断言 | 非法图 → `run.error(INVALID_GRAPH)` + `run.finished(FAILED)`，且错误带 `nodeId` |
+| 契约漂移守卫 | 故意改一处 manifest 后跑 `scripts/test.sh` | **如期报错**；改回后通过 |
 
 e2e 覆盖的真实事件流（54 条）被录制在 [`contracts/fixtures/events.jsonl`](contracts/fixtures/events.jsonl)，
 被 **runtime、web、server 三端各自的契约测试读同一份文件** —— 任何一端改字段，三端一起红。
