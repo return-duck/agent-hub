@@ -126,6 +126,22 @@ class RunFlowIT {
     @BeforeEach
     void reset() {
         failExecute = false;
+        // 等上一用例的异步 run 收尾：否则它会在下面的清理之后继续写库，
+        // 既刷一屏外键报错，也可能干扰断言（用例之间共享同一个库）。
+        long drainDeadline = System.currentTimeMillis() + 5_000;
+        while (System.currentTimeMillis() < drainDeadline) {
+            Integer active = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM run WHERE status IN ('QUEUED','RUNNING')", Integer.class);
+            if (active == null || active == 0) {
+                break;
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
         jdbc.execute("DELETE FROM run_event");
         jdbc.execute("DELETE FROM message");
         jdbc.execute("DELETE FROM run");

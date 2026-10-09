@@ -104,6 +104,8 @@ export interface StudioState {
   nodes: AgentNode[];
   edges: Edge[];
   dirty: boolean;
+  published: boolean;
+  publicSlug: string | null;
   selectedNodeId: string | null;
 
   run: RunState;
@@ -128,6 +130,8 @@ export interface StudioState {
   clearNotice: () => void;
 
   save: () => Promise<string | null>;
+  publishAgent: () => Promise<void>;
+  unpublishAgent: () => Promise<void>;
   runWithInput: (input: Record<string, unknown>) => Promise<void>;
   resetRun: () => void;
 }
@@ -144,6 +148,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   nodes: fromGraphPayload(STARTER_GRAPH).nodes,
   edges: fromGraphPayload(STARTER_GRAPH).edges,
   dirty: true,
+  published: false,
+  publicSlug: null,
   selectedNodeId: null,
 
   run: initialRunState,
@@ -194,6 +200,8 @@ export const useStudio = create<StudioState>((set, get) => ({
         nodes,
         edges,
         dirty: false,
+        published: agent.published,
+        publicSlug: agent.publicSlug,
         selectedNodeId: null,
         conversationId: null,
         run: initialRunState,
@@ -298,6 +306,50 @@ export const useStudio = create<StudioState>((set, get) => ({
       const detail = error instanceof ApiError && error.details.length > 0 ? error.detailText : undefined;
       set({ notice: { kind: 'error', text: describe(error), detail } });
       return null;
+    }
+  },
+
+  /**
+   * 发布 / 取消发布。
+   *
+   * 发布前先保存：否则用户改了图直接点发布，公开页跑的还是上一次存下来的版本。
+   * 发布是幂等的，重复点不会让链接变来变去。
+   */
+  publishAgent: async () => {
+    const id = await get().save();
+    if (!id) return;
+    set({ loading: true });
+    try {
+      const result = await api.publishAgent(id);
+      const agents = await api.listAgents();
+      set({
+        published: result.published,
+        publicSlug: result.slug,
+        agents,
+        loading: false,
+        notice: { kind: 'success', text: `已发布：${result.publicPath ?? result.slug}` },
+      });
+    } catch (error) {
+      set({ loading: false, notice: { kind: 'error', text: describe(error) } });
+    }
+  },
+
+  unpublishAgent: async () => {
+    const id = get().agentId;
+    if (!id) return;
+    set({ loading: true });
+    try {
+      const result = await api.unpublishAgent(id);
+      const agents = await api.listAgents();
+      set({
+        published: false,
+        publicSlug: result.slug,
+        agents,
+        loading: false,
+        notice: { kind: 'info', text: '已取消发布，公开链接立即失效' },
+      });
+    } catch (error) {
+      set({ loading: false, notice: { kind: 'error', text: describe(error) } });
     }
   },
 

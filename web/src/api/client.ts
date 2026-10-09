@@ -5,14 +5,11 @@
  * 而且 run 的执行与落库完全不依赖浏览器是否在场（关掉页面 run 照样跑完）。
  */
 /**
- * API 前缀刻意用【相对路径】（"api/..." 而不是 "/api/..."）。
- *
- * 原因：同一份构建产物要能挂在两种位置 ——
- *   根路径   http://<ip>:8080/         → 浏览器解析成 /api/...
- *   子路径   http://<ip>/studio/       → 浏览器解析成 /studio/api/...
- * 后者用于在 80 端口上提供访问（部分网络会屏蔽 8080 这类非标准端口）。
- * 用绝对路径 "/api/..." 的话，挂在子路径下就会请求到根路径去，直接 404。
+ * API 基址由 config/base.ts 推导（/api、/studio/api 等），
+ * 这样同一份产物能同时支持根路径、/studio/ 子路径，以及 /a/<slug> 这类公开对话深路径。
  */
+import { apiBase } from '../config/base.js';
+import { clearSession, getToken } from '../store/session.js';
 import type { AgentGraph } from '../generated/agent-graph.js';
 import type { ProtocolEvent } from '../generated/events.js';
 
@@ -22,12 +19,50 @@ export interface AgentSummary {
   description: string | null;
   graphSchemaVersion: number;
   nodeCount: number;
+  published: boolean;
+  publicSlug: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+/** 会话摘要；fromVisitor 表示这条会话来自公开分享页的访客。 */
+export interface ConversationSummary {
+  id: string;
+  title: string | null;
+  fromVisitor: boolean;
+  messageCount: number;
+  createdAt: string;
+}
+
+/** 公开分享页能看到的 agent 信息（不含 graph） */
+export interface PublicAgent {
+  slug: string;
+  name: string;
+  description: string | null;
+  publishedAt: string | null;
+}
+
+export interface PublishResult {
+  slug: string;
+  publicPath: string | null;
+  published: boolean;
+}
+
 export interface AgentDetail extends AgentSummary {
   graph: AgentGraph;
+  publishedAt: string | null;
 }
 
 export interface Capabilities {
@@ -92,10 +127,20 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const token = getToken();
+  const response = await fetch(apiBase() + path, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
+
+  // 令牌过期或被吊销时清掉本地登录态，让界面回到登录页而不是反复报错
+  if (response.status === 401) {
+    clearSession();
+  }
 
   if (response.status === 204) {
     return undefined as T;
@@ -117,28 +162,64 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listAgents: () => request<AgentSummary[]>('api/agents'),
-  getAgent: (id: string) => request<AgentDetail>(`api/agents/${id}`),
+  listAgents: () => request<AgentSummary[]>('/agents'),
+  getAgent: (id: string) => request<AgentDetail>(`/agents/${id}`),
   createAgent: (name: string, description: string, graph: AgentGraph) =>
-    request<AgentDetail>('api/agents', {
+    request<AgentDetail>('/agents', {
       method: 'POST',
       body: JSON.stringify({ name, description, graph }),
     }),
   updateAgent: (id: string, name: string, description: string, graph: AgentGraph) =>
-    request<AgentDetail>(`api/agents/${id}`, {
+    request<AgentDetail>(`/agents/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ name, description, graph }),
     }),
-  deleteAgent: (id: string) => request<void>(`api/agents/${id}`, { method: 'DELETE' }),
-  capabilities: () => request<Capabilities>('api/capabilities'),
+  deleteAgent: (id: string) => request<void>(`/agents/${id}`, { method: 'DELETE' }),
+  capabilities: () => request<Capabilities>('/capabilities'),
   startRun: (agentId: string, input: Record<string, unknown>, conversationId?: string) =>
-    request<StartRunResponse>(`api/agents/${agentId}/runs`, {
+    request<StartRunResponse>(`/agents/${agentId}/runs`, {
       method: 'POST',
       body: JSON.stringify({ input, conversationId: conversationId ?? null }),
     }),
-  getRun: (runId: string) => request<RunView>(`api/runs/${runId}`),
+  getRun: (runId: string) => request<RunView>(`/runs/${runId}`),
   messagesOfConversation: (conversationId: string) =>
-    request<MessageView[]>(`api/conversations/${conversationId}/messages`),
+    request<MessageView[]>(`/conversations/${conversationId}/messages`),
+
+  // ---- 登录态 ----
+  register: (email: string, displayName: string, password: string) =>
+    request<AuthResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, displayName, password }),
+    }),
+  login: (email: string, password: string) =>
+    request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  me: () => request<AuthUser>('/auth/me'),
+
+  // ---- 发布 ----
+  publishAgent: (id: string) => request<PublishResult>(`/agents/${id}/publish`, { method: 'POST' }),
+  unpublishAgent: (id: string) => request<PublishResult>(`/agents/${id}/unpublish`, { method: 'POST' }),
+  listConversations: (agentId: string) => request<ConversationSummary[]>(`/agents/${agentId}/conversations`),
+
+  // ---- 公开分享页（免登录） ----
+  publicAgent: (slug: string) => request<PublicAgent>(`/public/agents/${encodeURIComponent(slug)}`),
+  startPublicRun: (slug: string, input: Record<string, unknown>, conversationId: string | null, visitor: string) =>
+    request<StartRunResponse>(`/public/agents/${encodeURIComponent(slug)}/runs`, {
+      method: 'POST',
+      body: JSON.stringify({ input, conversationId, visitorId: visitor }),
+    }),
+  publicConversations: (slug: string, visitor: string) =>
+    request<ConversationSummary[]>(
+      `/public/agents/${encodeURIComponent(slug)}/conversations?visitorId=${encodeURIComponent(visitor)}`,
+    ),
+  publicMessages: (slug: string, conversationId: string, visitor: string) =>
+    request<MessageView[]>(
+      `/public/agents/${encodeURIComponent(slug)}/conversations/${conversationId}/messages`
+        + `?visitorId=${encodeURIComponent(visitor)}`,
+    ),
 };
 
 const EVENT_TYPES = [
@@ -172,7 +253,28 @@ export function subscribeToRun(
   onEvent: (event: ProtocolEvent) => void,
   onConnectionIssue: (message: string) => void,
 ): RunSubscription {
-  const source = new EventSource(`api/runs/${runId}/events`);
+  return subscribe(`${apiBase()}/runs/${runId}/events`, onEvent, onConnectionIssue);
+}
+
+/** 公开分享页的事件流：URL 里要带 visitorId，服务端据此校验这条 run 属于该访客。 */
+export function subscribeToPublicRun(
+  slug: string,
+  runId: string,
+  visitor: string,
+  onEvent: (event: ProtocolEvent) => void,
+  onConnectionIssue: (message: string) => void,
+): RunSubscription {
+  const url = `${apiBase()}/public/agents/${encodeURIComponent(slug)}/runs/${runId}/events`
+    + `?visitorId=${encodeURIComponent(visitor)}`;
+  return subscribe(url, onEvent, onConnectionIssue);
+}
+
+function subscribe(
+  url: string,
+  onEvent: (event: ProtocolEvent) => void,
+  onConnectionIssue: (message: string) => void,
+): RunSubscription {
+  const source = new EventSource(url);
   let closed = false;
 
   const close = (): void => {

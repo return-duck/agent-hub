@@ -1,5 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from './api/client.js';
 import { AgentSidebar } from './components/AgentSidebar.js';
+import { ConversationList } from './components/ConversationList.js';
+import { publicAgentPath } from './config/base.js';
+import { clearSession, getStoredUser } from './store/session.js';
 import { Canvas } from './components/Canvas.js';
 import { Inspector } from './components/Inspector.js';
 import { RunPanel } from './components/RunPanel.js';
@@ -18,6 +22,34 @@ export default function App() {
   const clearNotice = useStudio((s) => s.clearNotice);
   const capabilities = useStudio((s) => s.capabilities);
   const selectedNodeId = useStudio((s) => s.selectedNodeId);
+  const published = useStudio((s) => s.published);
+  const publicSlug = useStudio((s) => s.publicSlug);
+  const publishAgent = useStudio((s) => s.publishAgent);
+  const unpublishAgent = useStudio((s) => s.unpublishAgent);
+
+  const [user] = useState(() => getStoredUser());
+  const [copied, setCopied] = useState(false);
+  const shareUrl = publicSlug ? `${window.location.origin}${publicAgentPath(publicSlug)}` : '';
+
+  async function logout() {
+    try {
+      await api.logout();
+    } catch {
+      // 令牌可能已过期，本地清掉就行
+    }
+    clearSession();
+    window.location.reload();
+  }
+
+  async function copyShareUrl() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   useEffect(() => {
     void bootstrap();
@@ -50,6 +82,20 @@ export default function App() {
           <button className="btn btn-primary" onClick={() => void save()} disabled={loading}>
             {dirty ? '保存 *' : '已保存'}
           </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => void publishAgent()}
+            disabled={loading}
+            title="先保存，再生成一条可分享的公开链接"
+          >
+            {published ? '重新发布' : '发布'}
+          </button>
+          {published && (
+            <button className="btn btn-mini" type="button" onClick={() => void unpublishAgent()} disabled={loading}>
+              取消发布
+            </button>
+          )}
         </div>
 
         <div className="topbar__status">
@@ -62,8 +108,25 @@ export default function App() {
           {capabilities?.modelMode === 'live' && (
             <span className="badge badge-ok">真实模型 · {capabilities.modelName}</span>
           )}
+          {user && (
+            <span className="topbar__user">
+              <span className="topbar__user-name" title={user.email}>{user.displayName}</span>
+              <button className="btn btn-mini" type="button" onClick={() => void logout()}>登出</button>
+            </span>
+          )}
         </div>
       </header>
+
+      {published && shareUrl && (
+        <div className="publish-bar">
+          <span className="publish-bar__label">公开链接</span>
+          <a className="publish-bar__link" href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
+          <button className="btn btn-mini" type="button" onClick={() => void copyShareUrl()}>
+            {copied ? '已复制' : '复制'}
+          </button>
+          <span className="publish-bar__hint">任何拿到链接的人都可以直接对话，无需登录</span>
+        </div>
+      )}
 
       {notice && (
         <div className={`notice notice-${notice.kind}`} onClick={clearNotice}>
@@ -83,6 +146,9 @@ export default function App() {
           </div>
           <div className="right__scroll">
             <RunPanel />
+            <div className="divider" />
+            <div className="panel-title">该 agent 的会话</div>
+            <ConversationList />
             <div className="divider" />
             <Inspector />
           </div>
