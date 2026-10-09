@@ -107,7 +107,7 @@ cp runtime/.env.example runtime/.env
 # 编辑 runtime/.env：
 #   MODEL_PROVIDER=deepseek
 #   DEEPSEEK_API_KEY=sk-xxxx        # https://platform.deepseek.com/api_keys
-#   MODEL_NAME=deepseek-flash
+#   MODEL_NAME=deepseek-chat
 ```
 
 ```bash
@@ -116,7 +116,7 @@ cd runtime && npm run run-graph fixtures/graph-with-tools.json '{"topic":"(12+8)
 ```
 
 **模型名会轮换，所以启动时会自检**：`deepseek-chat` / `deepseek-reasoner` 是旧名，
-官方文档当前列出的是 [`deepseek-flash` / `deepseek-v4-pro`](https://api-docs.deepseek.com/)。
+已知可用的是 `deepseek-chat` / `deepseek-reasoner` / `deepseek-v4-pro` / `deepseek-v4-flash`（见 @langchain/deepseek 的 profiles），启动时会调 `/models` 核对并打印你账号实际可用的名字。
 启动时 runtime 会调一次 `/models` 并打印可用列表；如果 `MODEL_NAME` 不在列表里，
 日志会直接告诉你可选值 —— 而不是让你在每次运行都失败之后才去猜。
 （这个自检不阻塞启动，接口不可用时只告警。）

@@ -17,7 +17,7 @@ function configWith(model: Partial<RuntimeConfig['model']>): RuntimeConfig {
     port: 0,
     model: {
       provider: 'deepseek',
-      name: 'deepseek-flash',
+      name: 'deepseek-chat',
       baseUrl: 'https://api.deepseek.com',
       apiKey: undefined,
       temperature: 0.2,
@@ -40,7 +40,7 @@ describe('provider 解析', () => {
       // 用一个不存在的目录，避免读到开发者本机的 runtime/.env
       const config = loadConfig('/nonexistent-agent-stack-dir');
       expect(config.model.provider).toBe('deepseek');
-      expect(config.model.name).toBe('deepseek-flash');
+      expect(config.model.name).toBe('deepseek-chat');
       expect(config.model.baseUrl).toBe('https://api.deepseek.com');
     } finally {
       if (previous !== undefined) process.env['MODEL_PROVIDER'] = previous;

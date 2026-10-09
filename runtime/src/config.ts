@@ -40,7 +40,9 @@ export interface RuntimeConfig {
  * 各 provider 的默认配置。
  *
  * 注意：DeepSeek 的模型名会轮换 —— `deepseek-chat` / `deepseek-reasoner` 已是旧名，
- * 官方文档当前列的是 `deepseek-flash` / `deepseek-v4-pro`。
+ * 以 @langchain/deepseek 自带的能力档案（profiles.js）为准：
+ *   deepseek-chat / deepseek-reasoner / deepseek-v4-pro / deepseek-v4-flash
+ * 四个都声明 toolCalling: true。此外启动时会调 /models 核对账号实际可用的名字。
  * 所以启动时会调用 /models 核对一次，对不上就打印可用列表（见 models/preflight.ts）。
  * 这也是为什么这里把默认模型名做成可覆盖的配置，而不是散落在代码里。
  */
@@ -49,7 +51,7 @@ const PROVIDER_DEFAULTS: Record<
   { model: string; baseUrl: string; keyEnv: string }
 > = {
   deepseek: {
-    model: 'deepseek-flash',
+    model: 'deepseek-chat',
     baseUrl: 'https://api.deepseek.com',
     keyEnv: 'DEEPSEEK_API_KEY',
   },

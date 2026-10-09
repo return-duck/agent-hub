@@ -2,7 +2,7 @@
  * 启动时的模型自检。
  *
  * 为什么需要它：DeepSeek 的模型名会轮换 —— `deepseek-chat` / `deepseek-reasoner`
- * 是旧名，官方文档当前列的是 `deepseek-flash` / `deepseek-v4-pro`。
+ * 会随着版本变化（@langchain/deepseek 的 profiles 里就有四个不同的名字）。
  * 如果配置里写了一个已经不存在的模型名，症状是"每次运行都失败、错误来自上游 400"，
  * 排查成本很高。这里在启动时主动调一次 /models，把可用列表打出来。
  *
