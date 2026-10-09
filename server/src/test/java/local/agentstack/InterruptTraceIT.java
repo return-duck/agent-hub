@@ -403,6 +403,48 @@ class InterruptTraceIT {
     }
 
     @Test
+    @DisplayName("会话级轨迹：一个会话里的多轮对话在同一次请求里按时间正序返回")
+    void conversationTraceGroupsTurns() {
+        Session user = newUser();
+        String agentId = createAgent(user.token());
+
+        Map<String, Object> first = startRun(user.token(), agentId, Map.of("topic", "第一轮"), null);
+        String conversationId = (String) first.get("conversationId");
+        awaitStatus(user.token(), (String) first.get("runId"), "SUCCEEDED", 10_000);
+        Map<String, Object> second = startRun(user.token(), agentId, Map.of("topic", "第二轮"), conversationId);
+        awaitStatus(user.token(), (String) second.get("runId"), "SUCCEEDED", 10_000);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> trace = get("/api/conversations/" + conversationId + "/trace", user.token()).getBody();
+        assertThat(trace).containsEntry("turnCount", 2);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> turns = (List<Map<String, Object>>) trace.get("turns");
+        assertThat(turns).hasSize(2);
+        // 时间正序：第一轮在前，且每题都能对上
+        assertThat(turns.get(0).get("question")).asString().contains("第一轮");
+        assertThat(turns.get(1).get("question")).asString().contains("第二轮");
+
+        // 每一轮都带上了自己的 span，并且 span 上能看出属于哪一轮
+        for (Map<String, Object> turn : turns) {
+            assertThat(turn.get("status")).isEqualTo("SUCCEEDED");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> spans = (List<Map<String, Object>>) turn.get("spans");
+            assertThat(spans).as("每一轮都应有轨迹").isNotEmpty();
+            assertThat(spans).allMatch(sp -> turn.get("runId").equals(sp.get("runId")));
+        }
+        // 模型输入输出在这一页里也能看到
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> firstSpans = (List<Map<String, Object>>) turns.get(0).get("spans");
+        assertThat(firstSpans).anyMatch(sp -> "model".equals(sp.get("kind")) && sp.get("input") != null);
+
+        // 归属隔离：别人的会话轨迹拿不到
+        Session other = newUser();
+        assertThat(get("/api/conversations/" + conversationId + "/trace", other.token()).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("轨迹的归属隔离：别人的 run 轨迹读不到，也中断不了")
     void tracesAndCancelAreIsolated() {
         Session owner = newUser();

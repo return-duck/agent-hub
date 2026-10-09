@@ -53,4 +53,12 @@ public class TraceController {
         runService.requireConversationAccess(user.getId(), conversationId);
         return traceService.spansOfConversation(conversationId);
     }
+
+    /** 一个会话的完整轨迹（多轮对话在一页里）：轨迹页直接消费这个结构 */
+    @GetMapping("/conversations/{conversationId}/trace")
+    public TraceDtos.ConversationTrace conversationTrace(@CurrentUser AppUser user,
+                                                         @PathVariable String conversationId) {
+        runService.requireConversationAccess(user.getId(), conversationId);
+        return traceService.conversationTrace(conversationId);
+    }
 }

@@ -157,10 +157,17 @@ bash deploy/split/deploy.sh verify    # 端到端验收
   记录 `retry_of_run_id` 血缘。粒度是**一轮**而非一个节点 —— runtime 刻意保持无状态
   （历史每次从 MySQL 全量下发），所以"断点"就是上一次完整轮次的边界。
 - **调用轨迹（持久化）**：新表 `trace_span`，kind = `node | model | tool | mcp | skill`，
-  含 span_seq / 起止时间 / 耗时 / 输入 / 输出 / 属性 / 错误。
-  查询入口：`GET /api/runs/{id}/traces`、`/api/conversations/{id}/traces`、
-  `/api/agents/{id}/runs`；公开页也能查自己那一轮。
-  工作室右侧有可折叠的「调用轨迹」面板（运行列表 + span 时间线 + 输入输出展开）。
+  含 span_seq / run_id / 起止时间 / 耗时 / 输入 / 输出 / 属性 / 错误。
+- **轨迹页（独立页面，挂在发布的 agent 下）**：`/<前缀>/a/<slug>/traces`
+  免登录，按**会话**组织：左侧是该访客在此 agent 下的会话列表，
+  右侧是选中会话的**全部轮次**，每轮一块（问 / 答 / 状态 / 耗时 / span 时间线）。
+  后端一次返回整份 `ConversationTrace`（`GET /api/public/agents/{slug}/conversations/{id}/trace`），
+  前端直接渲染 —— 轮次信息散在 run / message / trace_span 三张表里，拼装逻辑只留一份。
+  对话页的「看本轮」是就地快速查看，完整复盘走轨迹页。
+- 接口清单：`GET /api/runs/{id}/traces`、`/api/conversations/{id}/traces`、
+  `/api/conversations/{id}/trace`（会话级，多轮一次拿全）、`/api/agents/{id}/runs`；
+  公开侧对应 `/api/public/agents/{slug}/...`。工作室右侧另有可折叠的「调用轨迹」面板
+  （主人视角，跨会话看某个 agent 的运行列表）。
 
 > **MCP 与技能**：项目里目前没有 MCP / 技能节点的生产者（见 DESIGN 的"未实施"清单），
 > 但轨迹把它们作为一等类别准备好了 —— 协议里有 `kind`、表和界面都按类别展示，

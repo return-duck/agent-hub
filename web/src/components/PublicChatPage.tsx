@@ -8,6 +8,7 @@ import {
   type PublicAgent,
   type TraceSpan,
 } from '../api/client.js';
+import { publicTracePath } from '../config/base.js';
 import { visitorId } from '../store/session.js';
 
 /**
@@ -400,9 +401,13 @@ export function PublicChatPage({ slug }: { slug: string }) {
           )}
           {runId && !running && (
             <button className="btn btn-mini" type="button" onClick={() => void showTraces()}>
-              {traces ? '隐藏轨迹' : '看轨迹'}
+              {traces ? '隐藏本轮' : '看本轮'}
             </button>
           )}
+          {/* 完整轨迹在专门的页面上看：一个会话里的多轮能一起对照 */}
+          <a className="btn btn-mini" href={publicTracePath(slug)}>
+            调用轨迹
+          </a>
         </div>
       </main>
     </div>

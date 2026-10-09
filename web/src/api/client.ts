@@ -57,6 +57,8 @@ export interface PublicAgent {
 /** 一条调用轨迹。kind 决定用什么标签展示。 */
 export interface TraceSpan {
   id: string;
+  /** 属于哪一轮对话 */
+  runId: string;
   spanSeq: number;
   kind: 'node' | 'model' | 'tool' | 'mcp' | 'skill';
   name: string;
@@ -69,6 +71,27 @@ export interface TraceSpan {
   output: unknown;
   attributes: Record<string, unknown> | null;
   error: string | null;
+}
+
+/** 一轮对话的轨迹（轨迹页按轮次分组展示） */
+export interface TraceTurn {
+  runId: string;
+  status: RunView['status'] | 'UNKNOWN';
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  question: string | null;
+  answerPreview: string | null;
+  error: string | null;
+  spans: TraceSpan[];
+}
+
+/** 一个会话的完整轨迹：一个会话里的多轮对话在一页里看完 */
+export interface ConversationTrace {
+  conversationId: string;
+  title: string | null;
+  turnCount: number;
+  turns: TraceTurn[];
 }
 
 /** 轨迹页左侧的运行条目 */
@@ -272,6 +295,16 @@ export const api = {
       `/public/agents/${encodeURIComponent(slug)}/conversations/${conversationId}/rewind`,
       { method: 'POST', body: JSON.stringify({ keepSeq, visitorId: visitor }) },
     ),
+  /** 会话级轨迹（公开页的独立轨迹页用）：一个会话里所有轮次的轨迹一次拿全 */
+  publicConversationTrace: (slug: string, conversationId: string, visitor: string) =>
+    request<ConversationTrace>(
+      `/public/agents/${encodeURIComponent(slug)}/conversations/${conversationId}/trace`
+        + `?visitorId=${encodeURIComponent(visitor)}`,
+    ),
+  /** 会话级轨迹（主人侧，工作室用） */
+  conversationTrace: (conversationId: string) =>
+    request<ConversationTrace>(`/conversations/${conversationId}/trace`),
+
   publicRunTraces: (slug: string, runId: string, visitor: string) =>
     request<TraceSpan[]>(`/public/agents/${encodeURIComponent(slug)}/runs/${runId}/traces`
       + `?visitorId=${encodeURIComponent(visitor)}`),

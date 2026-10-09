@@ -120,6 +120,18 @@ public class PublicController {
         return traceService.spansOfRun(runId);
     }
 
+    /**
+     * 一个会话的完整调用轨迹：该访客在这个会话里**每一轮**的模型输入输出、
+     * 工具/MCP/技能调用、节点耗时都在同一个响应里，供专门的轨迹页渲染。
+     */
+    @GetMapping("/{slug}/conversations/{conversationId}/trace")
+    public TraceDtos.ConversationTrace conversationTrace(@PathVariable String slug,
+                                                         @PathVariable String conversationId,
+                                                         @RequestParam("visitorId") String visitorId) {
+        runService.requirePublicConversation(slug, visitorId, conversationId);
+        return traceService.conversationTrace(conversationId);
+    }
+
     /** 公开请求体：input 是给图用的输入，conversationId 传 null 表示新开会话。 */
     public record PublicStartRequest(java.util.Map<String, Object> input, String conversationId, String visitorId) {
     }

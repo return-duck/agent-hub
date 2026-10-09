@@ -320,6 +320,13 @@ public class RunService {
         return run;
     }
 
+    /** 公开页面查某个会话的轨迹前的归属校验（会话必须属于这个访客）。 */
+    @Transactional(readOnly = true)
+    public void requirePublicConversation(String slug, String visitorId, String conversationId) {
+        Agent agent = agentService.requirePublic(slug);
+        requireVisitorConversation(agent.getId(), requireVisitor(visitorId), conversationId);
+    }
+
     /** 供轨迹查询等只读接口复用的归属校验。 */
     @Transactional(readOnly = true)
     public void requireConversationAccess(String ownerId, String conversationId) {
