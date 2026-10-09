@@ -375,7 +375,8 @@ public class RunService {
 
     private RunDtos.RunView toView(Run run) {
         return new RunDtos.RunView(run.getId(), run.getAgentId(), run.getConversationId(),
-                run.getStatus().name(), readTreeOrNull(run.getInputJson()), run.getAnswer(),
+                run.getStatus().name(), run.getRetryOfRunId(),
+                readTreeOrNull(run.getInputJson()), run.getAnswer(),
                 readTreeOrNull(run.getErrorJson()), run.getStartedAt(), run.getFinishedAt());
     }
 

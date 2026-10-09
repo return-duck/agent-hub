@@ -35,6 +35,8 @@ public final class RunDtos {
             String agentId,
             String conversationId,
             String status,
+            /** 这一轮是重试哪一次 run（断点重试的血缘） */
+            String retryOfRunId,
             JsonNode input,
             String answer,
             JsonNode error,
