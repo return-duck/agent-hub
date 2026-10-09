@@ -29,6 +29,12 @@ set -a; source "$CONFIG"; set +a
 : "${MODEL_PROVIDER:=deepseek}"
 : "${MODEL_TEMPERATURE:=0.2}"
 
+# 端点覆盖变量在运行时里叫 MODEL_BASE_URL（不是 OPENAI_BASE_URL），这里兼容两种写法，
+# 免得"填了 OPENAI_BASE_URL 却不生效"这种查不出原因的坑。
+: "${MODEL_BASE_URL:=${OPENAI_BASE_URL:-}}"
+: "${DEEPSEEK_API_KEY:=}"
+: "${OPENAI_API_KEY:=}"
+
 SSH_PORT="${DEPLOY_SSH_PORT:-22}"
 TARGET="$DEPLOY_USER@$DEPLOY_HOST"
 

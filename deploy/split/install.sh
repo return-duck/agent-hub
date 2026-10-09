@@ -152,6 +152,12 @@ SQL
   ok "  schema \`$DB_NAME\` 与账号 $DB_USER 就绪（表由 Flyway 在 server 启动时创建）"
 
   step "7. 写入各组件配置（权限 600）"
+  write_envs
+  ok "init 完成"
+}
+
+# 把配置写进各组件读的 env 文件（init 与 config 共用；权限 600）
+write_envs() {
   cat > "$APP_DIR/shared/server.env" <<ENV
 AGENT_STACK_DB_HOST=${DB_HOST:-127.0.0.1}
 AGENT_STACK_DB_PORT=${DB_PORT:-3306}
@@ -173,9 +179,8 @@ TOOL_HTTP_ALLOWLIST=${TOOL_HTTP_ALLOWLIST:-example.com,httpbin.org}
 ENV
   chmod 600 "$APP_DIR/shared/server.env" "$APP_DIR/shared/runtime.env"
   chown -R "$RUN_AS:$RUN_AS" "$APP_DIR"
-  chmod 755 "$APP_DIR" "$APP_DIR"/{web,server,runtime,shared,incoming}
-  ok "  配置写入完毕"
-  ok "init 完成"
+  chmod 755 "$APP_DIR" "$APP_DIR"/{web,server,runtime,shared,incoming} 2>/dev/null || true
+  ok "  配置已写入 $APP_DIR/shared/（权限 600）"
 }
 
 # ================================================================ web
@@ -195,9 +200,23 @@ do_web() {
   mv "$APP_DIR/web.new" "$APP_DIR/web"
   chown -R "$RUN_AS:$RUN_AS" "$APP_DIR/web"
 
+  # 权限归一化：nginx 以 nginx 用户读静态文件，600/700 会直接 403
+  find "$APP_DIR/web" -type d -exec chmod 755 {} +
+  find "$APP_DIR/web" -type f -exec chmod 644 {} +
+  chown -R "$RUN_AS:$RUN_AS" "$APP_DIR/web"
+
   nginx -t >/dev/null 2>&1 || die "nginx 配置校验失败"
   systemctl reload nginx
   ok "  前端已更新（$(find "$APP_DIR/web" -type f | wc -l) 个文件）并 reload nginx"
+
+  # 就绪校验：光看"文件放好了"不够，必须确认 nginx 真的能读到（403 就是读不到）
+  if http_ok "http://127.0.0.1:$APP_PORT/" '<div id="root">'; then
+    ok "  经 nginx 验证可访问（http://127.0.0.1:$APP_PORT/ 返回页面）"
+  else
+    warn "  经 nginx 访问异常，错误日志："
+    tail -5 /var/log/nginx/agent-stack.error.log 2>/dev/null || true
+    die "前端部署后不可访问"
+  fi
   rm -rf "$APP_DIR/web.old"
 }
 
@@ -295,11 +314,33 @@ do_verify() {
   free -m | head -2 | sed 's/^/  /'
 }
 
+# ================================================================ config
+# 只重写 shared/*.env 并重启组件：改了模型 key / 端口后用它，不必重跑整个 init
+do_config() {
+  step "应用配置（只重写 shared/*.env 并重启组件）"
+  write_envs
+  echo "--- server.env ---"; sed -E 's/(PASSWORD=).*/\1********/' "$APP_DIR/shared/server.env" | sed 's/^/  /'
+  echo "--- runtime.env（key 已脱敏）---"
+  sed -E 's/(API_KEY=)(.+)/\1********(长度 \2)/; s/(API_KEY=)$/\1(空，将降级为脚本化模型)/' "$APP_DIR/shared/runtime.env" | sed 's/^/  /'
+
+  systemctl reset-failed agent-stack-runtime 2>/dev/null || true
+  systemctl restart agent-stack-runtime
+  wait_http "http://127.0.0.1:$RUNTIME_PORT/healthz" '"status":"ok"' "runtime" 60 || warn "  运行时未就绪"
+
+  # 模型配置变了只需要重启 runtime；但若 DB/端口也变了则 server 也要重启，一并做掉更省心
+  systemctl reset-failed agent-stack-server 2>/dev/null || true
+  systemctl restart agent-stack-server
+  wait_http "http://127.0.0.1:$SERVER_PORT/actuator/health" '"status":"UP"' "server" 180 || warn "  后端未就绪"
+
+  do_verify
+}
+
 case "${1:-}" in
   init)    do_init ;;
+  config)  do_config ;;
   web)     do_web ;;
   server)  do_server ;;
   runtime) do_runtime ;;
   verify)  do_verify ;;
-  *)       die "用法: install.sh {init|web|server|runtime|verify}" ;;
+  *)       die "用法: install.sh {init|web|server|runtime|config|verify}" ;;
 esac

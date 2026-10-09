@@ -82,7 +82,7 @@ bash deploy/split/deploy.sh verify    # 端到端验收
 两个 unit 都写了 `StartLimitIntervalSec=300` / `StartLimitBurst=5`：
 内存不足被 OOM Kill 时最多重启 5 次就停手，**不会**像早先那版那样每 5 秒重启一次把整机拖死。
 
-## 踩过的两个坑（已在代码里修掉）
+## 踩过的三个坑（已在代码里修掉）
 
 1. **模板里写死路径**：`APP_DIR` 可配置，但 nginx/systemd 模板写死了 `/home/admin/agent-stack`，
    配置一旦不同就会出现"单元指向不存在的目录"。现在模板用 `__APP_DIR__` 等占位符，
@@ -90,3 +90,11 @@ bash deploy/split/deploy.sh verify    # 端到端验收
 2. **`systemctl start` 被 StartLimit 拒绝**：单元之前失败过会进入 failed，
    300 秒窗口内 systemd 直接拒绝启动，表现为"启动了但没有任何新日志"。
    现在启动前先 `systemctl reset-failed`，并检查 `start` 的返回值。
+
+3. **`umask` 作用域泄漏导致前端 403**：`upload_installer()` 为写含密码的配置设了 `umask 077`，
+   但它泄漏到了后续的打包流程 —— `cp` 把前端文件建成 `600`，tar 把 `600` 打进包，
+   服务器解包后 nginx（以 `nginx` 用户运行）读不了，页面直接 **403 Permission denied**。
+   第一次没暴露是因为 `init` 分支恰好"先打包再设 umask"，而 `all` 分支相反。
+   现在：① `umask` 用子 shell 限定作用域；② 打包后 `chmod -R a+rX` 归一化；
+   ③ 服务器解包后再次归一化（目录 755 / 文件 644）；④ `do_web` 增加就绪校验 ——
+   只检查"文件放好了"不够，必须确认 nginx 真能读到（403 就是读不到）。

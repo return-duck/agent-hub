@@ -6,6 +6,7 @@
 #   bash deploy/split/deploy.sh web       # 只打包上传前端 → nginx 托管
 #   bash deploy/split/deploy.sh server    # 只打包上传 Java → 重启后端
 #   bash deploy/split/deploy.sh runtime   # 只打包上传 Node → npm install → 重启
+#   bash deploy/split/deploy.sh config    # 只应用 deploy.env 里的配置（改 key/端口后用这个）
 #   bash deploy/split/deploy.sh all       # 三个都来（不含 init）
 #   bash deploy/split/deploy.sh verify    # 端到端验收（从公网访问 :8080）
 #   bash deploy/split/deploy.sh ssh       # 只测连通性
@@ -25,8 +26,8 @@ source "$ROOT/deploy/split/lib.sh"
 
 COMPONENT="${1:-}"
 case "$COMPONENT" in
-  init|web|server|runtime|all|verify|ssh) ;;
-  *) die "用法: bash deploy/split/deploy.sh {init|web|server|runtime|all|verify|ssh}" ;;
+  init|web|server|runtime|config|all|verify|ssh) ;;
+  *) die "用法: bash deploy/split/deploy.sh {init|web|server|runtime|config|all|verify|ssh}" ;;
 esac
 
 STAGE_ROOT="$ROOT/build/split"
@@ -74,6 +75,11 @@ build_and_pack() { # build_and_pack <component>
       ;;
   esac
 
+  # 权限归一化：保证包内文件对"其它用户"可读。
+  # nginx 静态文件必须以 nginx 用户可读（644/755），否则部署完是 403。
+  chmod -R a+rX "$stage"
+  find "$stage" -type f -name '*.sh' -exec chmod 755 {} +
+
   local tarball="$STAGE_ROOT/agent-stack-$c.tar.gz"
   rm -f "$tarball"
   tar -C "$stage" -czf "$tarball" .
@@ -105,6 +111,10 @@ upload_installer() {
   tar -C "$payload" -czf - . | sshrun "mkdir -p '$REMOTE_INCOMING/deployer' && tar -xzf - -C '$REMOTE_INCOMING/deployer'"
   # 服务器端配置（含密码，上传后 chmod 600）
   local env_file="$STAGE_ROOT/server-config.env"
+  # 用子 shell 限定 umask 的作用域！
+  # 之前直接在函数里 umask 077，会泄漏到后续的打包过程：cp 会把前端文件建成 600，
+  # tar 把 600 打进包，服务器解包后 nginx 读不了 → 403 Permission denied。
+  (
   umask 077
   cat > "$env_file" <<ENV
 APP_DIR=$APP_DIR
@@ -132,6 +142,7 @@ NPM_REGISTRY=${NPM_REGISTRY:-https://registry.npmmirror.com}
 RUN_AS=${RUN_AS:-agentstack}
 JRE_SOURCE=${JRE_SOURCE:-/opt/agent-stack/.toolchain/jre}
 ENV
+  )
   sshrun "cat > '$REMOTE_INCOMING/deployer/server-config.env'" < "$env_file"
   sshrun "chmod 600 '$REMOTE_INCOMING/deployer/server-config.env'"
   ok "部署器已上传"
@@ -157,6 +168,11 @@ case "$COMPONENT" in
     build_and_pack "$COMPONENT"
     upload "$COMPONENT"
     remote_install "$COMPONENT"
+    ;;
+  config)
+    # 只重写服务器上的 shared/*.env 并重启组件：改了 key / 端口后用它，不必重跑 init
+    upload_installer
+    remote_install config
     ;;
   all)
     upload_installer
