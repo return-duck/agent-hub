@@ -71,6 +71,13 @@ function CanvasInner() {
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable nodeColor="#3b82f6" maskColor="rgba(10,15,25,0.7)" />
       </ReactFlow>
+
+      {/* 连线方式不是自明的：默认锚点只有 5px，用户会误以为"拖节点主体就能连线"。
+          这行提示直接说明该从哪里拖（拖主体只会移动节点）。 */}
+      <div className="canvas__hint">
+        连线：从节点<b>左侧/右侧的圆点</b>拖到另一个节点的圆点。
+        拖动节点主体只会移动它。
+      </div>
     </div>
   );
 }

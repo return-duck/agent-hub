@@ -1105,3 +1105,69 @@ textarea {
     opacity: 0;
   }
 }
+
+/* ==========================================================================
+   画布连线锚点（React Flow 的 Handle）
+   ==========================================================================
+   问题：React Flow 默认的锚点是 5×5 像素的小圆点，几乎不可能点中。
+   用户于是很自然地改为拖动节点主体去"连线"——但拖主体只会移动节点，
+   表现为"两个节点连不上"（这个交互问题是用 CDP 驱动真实浏览器复现确认的）。
+
+   解决：把锚点放大到 16px，并把定位偏移改成 ±尺寸/2，
+   使圆心仍然正好落在节点边缘上（与默认的视觉位置一致）。
+   ========================================================================== */
+.react-flow__handle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-soft-2);
+  border: 2px solid var(--primary);
+  /* 一圈背景色描边，避免和节点边框糊在一起 */
+  box-shadow: 0 0 0 3px var(--bg);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.react-flow__handle:hover {
+  background: var(--primary);
+}
+
+/* 正在从这里拉出线 / 线正指向这里 */
+.react-flow__handle.connectingfrom,
+.react-flow__handle.connectingto {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+/* 选中节点时强调它的锚点，暗示"这里可以拖" */
+.graph-node.selected .react-flow__handle {
+  border-color: var(--ok);
+  background: rgba(34, 197, 94, 0.25);
+}
+
+/* 圆心对齐节点边缘：right/left/top/bottom 偏移 = 尺寸的一半 */
+.react-flow__handle-right { right: -8px; }
+.react-flow__handle-left { left: -8px; }
+.react-flow__handle-top { top: -8px; }
+.react-flow__handle-bottom { bottom: -8px; }
+
+/* 画布上的操作提示 */
+.canvas__hint {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 5;
+  background: rgba(11, 17, 32, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  pointer-events: none;
+  max-width: 340px;
+}
+
+.canvas__hint b {
+  color: var(--text);
+  font-weight: 600;
+}
