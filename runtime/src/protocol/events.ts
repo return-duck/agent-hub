@@ -59,13 +59,26 @@ export const events = {
       durationMs?: number;
       /** token 数是否为估算（模型未返回 usage）—— 前端据此决定要不要提示"估算" */
       estimated?: boolean;
+      /** 本次调用的模型输入（按 role 前缀渲染，超长截断）。用于调用轨迹查询 */
+      input?: string;
+      /** 本次调用的模型输出文本（超长截断） */
+      output?: string;
+      inputTruncated?: boolean;
+      outputTruncated?: boolean;
     },
   ): OutboundEvent {
     return { type: 'llm.completed', runId, nodeId, ts: now(), payload: { ...info } };
   },
 
-  toolStarted(runId: string, nodeId: string, toolName: string, callId: string, args: unknown): OutboundEvent {
-    return { type: 'tool.started', runId, nodeId, ts: now(), payload: { toolName, callId, args } };
+  toolStarted(
+    runId: string,
+    nodeId: string,
+    toolName: string,
+    callId: string,
+    args: unknown,
+    kind: 'tool' | 'mcp' | 'skill' = 'tool',
+  ): OutboundEvent {
+    return { type: 'tool.started', runId, nodeId, ts: now(), payload: { toolName, callId, kind, args } };
   },
 
   toolFinished(
@@ -78,6 +91,7 @@ export const events = {
       result: string;
       isError: boolean;
       truncated: boolean;
+      kind: 'tool' | 'mcp' | 'skill';
     },
   ): OutboundEvent {
     return { type: 'tool.finished', runId, nodeId, ts: now(), payload: { ...info } };

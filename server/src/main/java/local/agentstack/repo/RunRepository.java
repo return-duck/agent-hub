@@ -16,6 +16,10 @@ public interface RunRepository extends JpaRepository<Run, String> {
 
     Optional<Run> findFirstByConversationIdOrderByStartedAtDesc(String conversationId);
 
+    long countByConversationIdAndStatusIn(String conversationId, Collection<RunStatus> statuses);
+
+    List<Run> findByConversationIdAndStatusIn(String conversationId, Collection<RunStatus> statuses);
+
     /** 该会话是否还有未结束的轮次（用于阻止并发，避免 seq 撞车）。 */
     boolean existsByConversationIdAndStatusIn(String conversationId, Collection<RunStatus> statuses);
 }

@@ -1,54 +1,54 @@
-{"type":"run.started","runId":"fixture-run","nodeId":null,"ts":"2026-10-08T10:32:41.895Z","payload":{"model":{"provider":"scripted","name":"scripted-deterministic-v1","mode":"scripted"},"graphSchemaVersion":1,"input":{"topic":"(12+8)*3"}}}
-{"type":"node.started","runId":"fixture-run","nodeId":"n1","ts":"2026-10-08T10:32:41.897Z","payload":{"nodeType":"start","label":"开始"}}
-{"type":"node.finished","runId":"fixture-run","nodeId":"n1","ts":"2026-10-08T10:32:41.897Z","payload":{"nodeType":"start","durationMs":0,"status":"ok"}}
-{"type":"node.started","runId":"fixture-run","nodeId":"n2","ts":"2026-10-08T10:32:41.897Z","payload":{"nodeType":"prompt","label":"提示词"}}
-{"type":"node.finished","runId":"fixture-run","nodeId":"n2","ts":"2026-10-08T10:32:41.898Z","payload":{"nodeType":"prompt","durationMs":1,"status":"ok"}}
-{"type":"node.started","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.898Z","payload":{"nodeType":"llm","label":"大模型"}}
-{"type":"llm.completed","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.898Z","payload":{"model":"scripted/scripted-deterministic-v1 (tokens 为估算)","inputTokens":57,"outputTokens":1,"messageCount":1}}
-{"type":"message.completed","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.898Z","payload":{"role":"assistant","content":"","toolCalls":[{"id":"call_scripted_1","name":"calculator","args":{"expression":"(12+8)*3"}}]}}
-{"type":"tool.started","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.900Z","payload":{"toolName":"calculator","callId":"01a11b12-88ac-7558-befc-36c4043606f0","args":{"expression":"(12+8)*3"}}}
-{"type":"tool.finished","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.900Z","payload":{"toolName":"calculator","callId":"01a11b12-88ac-7558-befc-36c4043606f0","durationMs":0,"result":"(12+8)*3 = 60","isError":false,"truncated":false}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"我调用了工具"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"，得到结果："}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"(12+8)"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"*3 = 6"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"0。\n\n这是"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"内置脚本化模"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"型的回答 —"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"— 它没有真"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.901Z","payload":{"delta":"实推理能力，"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"存在的意义是"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"让整条链路\n"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"（图编译 →"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":" 工具循环 "}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"→ 流式输出"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":" → 事件落"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"库 → 前端"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"逐字渲染）在"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"没有任何 A"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"PI key"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":" 的\n情况下"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"也能跑通、可"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"复现、可测试"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"。\n\n在 r"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"untime"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"/.env "}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"里填入 OP"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"ENAI_A"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"PI_KEY"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":" 并把 MO"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.902Z","payload":{"delta":"DEL_PR"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"OVIDER"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":" 设为 op"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"enai，\n"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"同一个 ag"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"ent 就会"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"改用真实模型"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"，图与代码都"}}
-{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"delta":"不需要改动。"}}
-{"type":"llm.completed","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"model":"scripted/scripted-deterministic-v1","inputTokens":8,"outputTokens":57,"messageCount":1}}
-{"type":"message.completed","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"role":"assistant","content":"我调用了工具，得到结果：(12+8)*3 = 60。\n\n这是内置脚本化模型的回答 —— 它没有真实推理能力，存在的意义是让整条链路\n（图编译 → 工具循环 → 流式输出 → 事件落库 → 前端逐字渲染）在没有任何 API key 的\n情况下也能跑通、可复现、可测试。\n\n在 runtime/.env 里填入 OPENAI_API_KEY 并把 MODEL_PROVIDER 设为 openai，\n同一个 agent 就会改用真实模型，图与代码都不需要改动。"}}
-{"type":"node.finished","runId":"fixture-run","nodeId":"n3","ts":"2026-10-08T10:32:41.903Z","payload":{"nodeType":"llm","durationMs":5,"status":"ok"}}
-{"type":"node.started","runId":"fixture-run","nodeId":"n4","ts":"2026-10-08T10:32:41.904Z","payload":{"nodeType":"end","label":"结束"}}
-{"type":"node.finished","runId":"fixture-run","nodeId":"n4","ts":"2026-10-08T10:32:41.904Z","payload":{"nodeType":"end","durationMs":0,"status":"ok"}}
-{"type":"run.finished","runId":"fixture-run","nodeId":null,"ts":"2026-10-08T10:32:41.904Z","payload":{"status":"SUCCEEDED","durationMs":9,"answer":"我调用了工具，得到结果：(12+8)*3 = 60。\n\n这是内置脚本化模型的回答 —— 它没有真实推理能力，存在的意义是让整条链路\n（图编译 → 工具循环 → 流式输出 → 事件落库 → 前端逐字渲染）在没有任何 API key 的\n情况下也能跑通、可复现、可测试。\n\n在 runtime/.env 里填入 OPENAI_API_KEY 并把 MODEL_PROVIDER 设为 openai，\n同一个 agent 就会改用真实模型，图与代码都不需要改动。","totals":{"inputTokens":65,"outputTokens":58,"llmCalls":2,"toolCalls":1,"steps":6}}}
+{"type":"run.started","runId":"fixture-run","nodeId":null,"ts":"1970-01-01T00:00:00.000Z","payload":{"model":{"provider":"scripted","name":"scripted-deterministic-v1","mode":"scripted"},"graphSchemaVersion":1,"input":{"topic":"(12+8)*3"}}}
+{"type":"node.started","runId":"fixture-run","nodeId":"n1","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"start","label":"开始"}}
+{"type":"node.finished","runId":"fixture-run","nodeId":"n1","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"start","durationMs":1,"status":"ok"}}
+{"type":"node.started","runId":"fixture-run","nodeId":"n2","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"prompt","label":"提示词"}}
+{"type":"node.finished","runId":"fixture-run","nodeId":"n2","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"prompt","durationMs":1,"status":"ok"}}
+{"type":"node.started","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"llm","label":"大模型"}}
+{"type":"llm.completed","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"model":"scripted/scripted-deterministic-v1","inputTokens":57,"outputTokens":1,"estimated":true,"messageCount":1,"input":"[user] 请帮我算一下：(12+8)*3","output":""}}
+{"type":"message.completed","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"role":"assistant","content":"","toolCalls":[{"id":"call_scripted_1","name":"calculator","args":{"expression":"(12+8)*3"}}]}}
+{"type":"tool.started","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"toolName":"calculator","callId":"01a120f1-13b8-712c-b663-f5b2e430a08f","kind":"tool","args":{"expression":"(12+8)*3"}}}
+{"type":"tool.finished","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"toolName":"calculator","callId":"01a120f1-13b8-712c-b663-f5b2e430a08f","kind":"tool","durationMs":0,"result":"(12+8)*3 = 60","isError":false,"truncated":false}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"我调用了工具"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"，得到结果："}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"(12+8)"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"*3 = 6"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"0。\n\n这是"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"内置脚本化模"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"型的回答 —"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"— 它没有真"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"实推理能力，"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"存在的意义是"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"让整条链路\n"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"（图编译 →"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":" 工具循环 "}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"→ 流式输出"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":" → 事件落"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"库 → 前端"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"逐字渲染）在"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"没有任何 A"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"PI key"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":" 的\n情况下"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"也能跑通、可"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"复现、可测试"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"。\n\n在 r"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"untime"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"/.env "}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"里填入 OP"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"ENAI_A"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"PI_KEY"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":" 并把 MO"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"DEL_PR"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"OVIDER"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":" 设为 op"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"enai，\n"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"同一个 ag"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"ent 就会"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"改用真实模型"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"，图与代码都"}}
+{"type":"llm.token","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"delta":"不需要改动。"}}
+{"type":"llm.completed","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"model":"scripted/scripted-deterministic-v1","inputTokens":8,"outputTokens":57,"estimated":false,"messageCount":3,"input":"[user] 请帮我算一下：(12+8)*3\n\n[assistant] \n\n[tool] (12+8)*3 = 60","output":"我调用了工具，得到结果：(12+8)*3 = 60。\n\n这是内置脚本化模型的回答 —— 它没有真实推理能力，存在的意义是让整条链路\n（图编译 → 工具循环 → 流式输出 → 事件落库 → 前端逐字渲染）在没有任何 API key 的\n情况下也能跑通、可复现、可测试。\n\n在 runtime/.env 里填入 OPENAI_API_KEY 并把 MODEL_PROVIDER 设为 openai，\n同一个 agent 就会改用真实模型，图与代码都不需要改动。"}}
+{"type":"message.completed","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"role":"assistant","content":"我调用了工具，得到结果：(12+8)*3 = 60。\n\n这是内置脚本化模型的回答 —— 它没有真实推理能力，存在的意义是让整条链路\n（图编译 → 工具循环 → 流式输出 → 事件落库 → 前端逐字渲染）在没有任何 API key 的\n情况下也能跑通、可复现、可测试。\n\n在 runtime/.env 里填入 OPENAI_API_KEY 并把 MODEL_PROVIDER 设为 openai，\n同一个 agent 就会改用真实模型，图与代码都不需要改动。"}}
+{"type":"node.finished","runId":"fixture-run","nodeId":"n3","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"llm","durationMs":11,"status":"ok"}}
+{"type":"node.started","runId":"fixture-run","nodeId":"n4","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"end","label":"结束"}}
+{"type":"node.finished","runId":"fixture-run","nodeId":"n4","ts":"1970-01-01T00:00:00.000Z","payload":{"nodeType":"end","durationMs":1,"status":"ok"}}
+{"type":"run.finished","runId":"fixture-run","nodeId":null,"ts":"1970-01-01T00:00:00.000Z","payload":{"status":"SUCCEEDED","durationMs":28,"answer":"我调用了工具，得到结果：(12+8)*3 = 60。\n\n这是内置脚本化模型的回答 —— 它没有真实推理能力，存在的意义是让整条链路\n（图编译 → 工具循环 → 流式输出 → 事件落库 → 前端逐字渲染）在没有任何 API key 的\n情况下也能跑通、可复现、可测试。\n\n在 runtime/.env 里填入 OPENAI_API_KEY 并把 MODEL_PROVIDER 设为 openai，\n同一个 agent 就会改用真实模型，图与代码都不需要改动。","totals":{"inputTokens":65,"outputTokens":58,"llmCalls":2,"toolCalls":1,"steps":6}}}

@@ -17,6 +17,7 @@ import {
   estimateTokens,
 } from '../util/messageText.js';
 import { events, type OutboundEvent } from '../protocol/events.js';
+import { toolKind, type ToolKind } from '../tools/index.js';
 import type { CanvasNodeInfo } from '../compiler/compile.js';
 import { TRUNCATION_MARKER } from '../tools/httpGet.js';
 
@@ -39,6 +40,8 @@ interface OpenTool {
   callId: string;
   canvasNodeId: string;
   startedAt: number;
+  /** 工具 / MCP / 技能 —— 轨迹按这个分类展示 */
+  kind: ToolKind;
 }
 
 export interface MapperOptions {
@@ -210,11 +213,12 @@ export class EventMapper {
           inputTokens,
           outputTokens,
           estimated,
-          messageCount: Array.isArray((raw.data?.['input'] as { messages?: unknown })?.messages)
-            ? ((raw.data?.['input'] as { messages: unknown[] }).messages.length)
-            : undefined,
+          messageCount: countMessages(raw.data?.['input']),
           finishReason: usage.finishReason,
           durationMs,
+          // 调用轨迹要能查到"这次到底给模型发了什么、模型回了什么"。
+          // 用可读文本而不是原始 JSON：体积小、直接可展示，且截断不会破坏结构。
+          ...renderModelIO(raw.data?.['input'], content),
         }),
       );
     }
@@ -238,9 +242,10 @@ export class EventMapper {
     const nodeId = this.currentNodeId(raw) ?? 'unknown';
     const callId = typeof raw.run_id === 'string' ? raw.run_id : `tool_${Date.now()}`;
     const toolName = typeof raw.name === 'string' ? raw.name : 'unknown';
-    this.openTools.set(callId, { toolName, callId, canvasNodeId: nodeId, startedAt: Date.now() });
+    const kind = toolKind(toolName);
+    this.openTools.set(callId, { toolName, callId, canvasNodeId: nodeId, startedAt: Date.now(), kind });
     this.totals.toolCalls += 1;
-    return [events.toolStarted(this.runId, nodeId, toolName, callId, raw.data?.['input'] ?? {})];
+    return [events.toolStarted(this.runId, nodeId, toolName, callId, raw.data?.['input'] ?? {}, kind)];
   }
 
   private onToolEnd(raw: RawEvent, isError: boolean): OutboundEvent[] {
@@ -271,6 +276,7 @@ export class EventMapper {
       events.toolFinished(this.runId, nodeId, {
         toolName,
         callId,
+        kind: open?.kind ?? toolKind(toolName),
         durationMs,
         result,
         isError: isError || status === 'error',
@@ -363,4 +369,108 @@ function errorText(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return JSON.stringify(error ?? {});
+}
+
+/** 模型输入/输出文本在轨迹里的上限。够看清一次调用，又不至于把库撑爆。 */
+const MAX_MODEL_IO_CHARS = 4000;
+
+/**
+ * 把「送给模型的输入」和「模型返回的文本」渲染成可读文本。
+ *
+ * 为什么不直接存原始 JSON：体积大、前端还要自己解析，而且截断 JSON 会产生非法结构。
+ * 渲染成 "[role] 内容" 的纯文本后，截断永远安全，轨迹页可以直接展示。
+ */
+function renderModelIO(
+  input: unknown,
+  outputText: string,
+): { input?: string; output?: string; inputTruncated?: boolean; outputTruncated?: boolean } {
+  const items = extractMessageItems(input);
+  const inputText = items.length > 0
+    ? items.map((m) => `[${m.role}] ${m.text}`).join('\n\n')
+    : JSON.stringify(input ?? {});
+  const inTrim = truncateText(inputText, MAX_MODEL_IO_CHARS);
+  const outTrim = truncateText(outputText ?? '', MAX_MODEL_IO_CHARS);
+  return {
+    input: inTrim.text,
+    output: outTrim.text,
+    ...(inTrim.truncated ? { inputTruncated: true } : {}),
+    ...(outTrim.truncated ? { outputTruncated: true } : {}),
+  };
+}
+
+interface MessageLike {
+  role: string;
+  text: string;
+}
+
+/**
+ * 从回调的 data.input 里抽出"这次到底给模型发了哪些消息"。
+ *
+ * 为什么写得这么防御：LangChain 在不同版本 / 不同调用方式下给的形状并不一致 ——
+ * 可能是 BaseMessage 实例、可能是 {messages:[...]}、也可能是**序列化后**的对象
+ * （{lc, id:['langchain_core','messages','HumanMessage'], kwargs:{content}}），
+ * 还可能被多包一层数组。本项目实测遇到的就是"序列化 + 多包一层"。
+ *
+ * 之前只看 .content，结果轨迹里的"模型输入"是空的（[unknown] ""），
+ * 而 messageCount 也因为只数外层数组长度而恒为 1 —— 两个 bug 都是靠重新录制 fixture 才暴露的。
+ */
+function extractMessageItems(input: unknown): MessageLike[] {
+  const root = (input as { messages?: unknown })?.messages ?? input;
+  const flat: unknown[] = [];
+  const walk = (value: unknown, depth: number): void => {
+    if (depth > 4 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth + 1);
+      return;
+    }
+    flat.push(value);
+  };
+  walk(root, 0);
+  return flat.map((m) => ({ role: messageRole(m), text: contentOf(m) }));
+}
+
+function countMessages(input: unknown): number | undefined {
+  const items = extractMessageItems(input);
+  return items.length > 0 ? items.length : undefined;
+}
+
+function messageRole(message: unknown): string {
+  const rec = message as { role?: unknown; _getType?: () => string; id?: unknown };
+  if (typeof rec?.role === 'string' && rec.role) return normalizeRole(rec.role);
+  if (typeof rec?._getType === 'function') {
+    const type = rec._getType();
+    if (type) return normalizeRole(type);
+  }
+  // 序列化形态：id 形如 ['langchain_core','messages','HumanMessage']
+  if (Array.isArray(rec?.id) && rec.id.length > 0) {
+    return normalizeRole(String(rec.id[rec.id.length - 1]));
+  }
+  return 'unknown';
+}
+
+function normalizeRole(type: string): string {
+  const t = type.toLowerCase();
+  if (t.includes('human') || t === 'user') return 'user';
+  if (t.includes('system')) return 'system';
+  if (t.includes('tool')) return 'tool';
+  if (t.includes('ai') || t === 'assistant') return 'assistant';
+  return type;
+}
+
+function contentOf(message: unknown): string {
+  const rec = message as { content?: unknown; kwargs?: { content?: unknown } };
+  const content = rec?.content ?? rec?.kwargs?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((block) =>
+        typeof block === 'string' ? block : String((block as { text?: unknown })?.text ?? ''),
+      )
+      .join('');
+  }
+  return '';
+}
+
+function truncateText(text: string, max: number): { text: string; truncated: boolean } {
+  return text.length > max ? { text: text.slice(0, max) + TRUNCATION_MARKER, truncated: true } : { text, truncated: false };
 }

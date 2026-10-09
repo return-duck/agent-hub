@@ -11,6 +11,24 @@ import type { ToolName } from '../generated/manifest.js';
 import { evaluateExpression } from './calculator.js';
 import { httpGet } from './httpGet.js';
 
+/**
+ * 工具类别。调用轨迹按类别分开记录（工具 / MCP / 技能）。
+ *
+ * 目前只有本地工具这一类的生产者 —— MCP 与技能在 docs/DESIGN.md 里明确列为未实施。
+ * 但轨迹与协议已经把它们作为一等类别：将来接入 @langchain/mcp-adapters 或技能包时，
+ * 只要在这里登记名字，轨迹页就会自动按类别归类，不需要改协议或数据库。
+ */
+export type ToolKind = 'tool' | 'mcp' | 'skill';
+
+const TOOL_KINDS: Record<string, ToolKind> = {
+  calculator: 'tool',
+  http_get: 'tool',
+};
+
+export function toolKind(name: string): ToolKind {
+  return TOOL_KINDS[name] ?? 'tool';
+}
+
 export const CALCULATOR_INPUT_SCHEMA = {
   type: 'object',
   properties: {

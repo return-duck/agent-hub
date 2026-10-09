@@ -86,6 +86,22 @@ export interface LlmCompleted {
      * token 数是否由「4 字符≈1 token」估算得出（模型未返回 usage 时为 true）
      */
     estimated?: boolean;
+    /**
+     * 本次模型调用实际发送的输入（按 role 前缀渲染的文本，超长会截断）
+     */
+    input?: string;
+    /**
+     * 本次模型调用返回的文本（超长会截断）
+     */
+    output?: string;
+    /**
+     * input 是否被截断
+     */
+    inputTruncated?: boolean;
+    /**
+     * output 是否被截断
+     */
+    outputTruncated?: boolean;
   };
 }
 export interface ToolStarted {
@@ -97,6 +113,10 @@ export interface ToolStarted {
   payload: {
     toolName: string;
     callId: string;
+    /**
+     * 调用类别：本地工具 / MCP 工具 / 技能。分别以不同类别记录进调用轨迹
+     */
+    kind?: "tool" | "mcp" | "skill";
     args?: unknown;
   };
 }
@@ -109,6 +129,10 @@ export interface ToolFinished {
   payload: {
     toolName: string;
     callId: string;
+    /**
+     * 调用类别：本地工具 / MCP 工具 / 技能
+     */
+    kind?: "tool" | "mcp" | "skill";
     durationMs?: number;
     result?: string;
     isError?: boolean;
@@ -158,7 +182,10 @@ export interface RunFinished {
   nodeId?: string | null;
   ts: string;
   payload: {
-    status: "SUCCEEDED" | "FAILED";
+    /**
+     * CANCELLED 表示被用户主动中断；已产出的事件仍然有效，可据此重试
+     */
+    status: "SUCCEEDED" | "FAILED" | "CANCELLED";
     durationMs: number;
     answer?: string | null;
     totals?: {

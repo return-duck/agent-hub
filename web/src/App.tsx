@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api/client.js';
 import { AgentSidebar } from './components/AgentSidebar.js';
 import { ConversationList } from './components/ConversationList.js';
+import { TracePanel } from './components/TracePanel.js';
 import { publicAgentPath } from './config/base.js';
 import { clearSession, getStoredUser } from './store/session.js';
 import { Canvas } from './components/Canvas.js';
@@ -149,6 +150,8 @@ export default function App() {
             <div className="divider" />
             <div className="panel-title">该 agent 的会话</div>
             <ConversationList />
+            <div className="divider" />
+            <TracePanel />
             <div className="divider" />
             <Inspector />
           </div>

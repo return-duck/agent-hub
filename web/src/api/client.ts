@@ -54,6 +54,35 @@ export interface PublicAgent {
   publishedAt: string | null;
 }
 
+/** 一条调用轨迹。kind 决定用什么标签展示。 */
+export interface TraceSpan {
+  id: string;
+  spanSeq: number;
+  kind: 'node' | 'model' | 'tool' | 'mcp' | 'skill';
+  name: string;
+  nodeId: string | null;
+  status: 'ok' | 'error' | 'cancelled';
+  startedAt: string;
+  endedAt: string | null;
+  durationMs: number | null;
+  input: unknown;
+  output: unknown;
+  attributes: Record<string, unknown> | null;
+  error: string | null;
+}
+
+/** 轨迹页左侧的运行条目 */
+export interface RunSummary {
+  id: string;
+  status: RunView['status'];
+  retryOfRunId: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  answerPreview: string | null;
+  spanCount: number;
+}
+
 export interface PublishResult {
   slug: string;
   publicPath: string | null;
@@ -81,7 +110,7 @@ export interface RunView {
   id: string;
   agentId: string;
   conversationId: string;
-  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
   input: Record<string, unknown> | null;
   answer: string | null;
   error: { code?: string; message?: string } | null;
@@ -199,6 +228,23 @@ export const api = {
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
   me: () => request<AuthUser>('/auth/me'),
 
+  // ---- 中断 / 断点重试 / 回退 ----
+  cancelRun: (runId: string) => request<RunView>(`/runs/${runId}/cancel`, { method: 'POST' }),
+  retryRun: (runId: string) =>
+    request<StartRunResponse>(`/runs/${runId}/retry`, { method: 'POST' }),
+  /** 回退到 keepSeq（含），删掉其后的消息与其 run；返回剩余消息 */
+  rewindConversation: (conversationId: string, keepSeq: number) =>
+    request<MessageView[]>(`/conversations/${conversationId}/rewind`, {
+      method: 'POST',
+      body: JSON.stringify({ keepSeq }),
+    }),
+
+  // ---- 调用轨迹 ----
+  agentRuns: (agentId: string, limit = 30) =>
+    request<RunSummary[]>(`/agents/${agentId}/runs?limit=${limit}`),
+  runTraces: (runId: string) => request<TraceSpan[]>(`/runs/${runId}/traces`),
+  conversationTraces: (conversationId: string) => request<TraceSpan[]>(`/conversations/${conversationId}/traces`),
+
   // ---- 发布 ----
   publishAgent: (id: string) => request<PublishResult>(`/agents/${id}/publish`, { method: 'POST' }),
   unpublishAgent: (id: string) => request<PublishResult>(`/agents/${id}/unpublish`, { method: 'POST' }),
@@ -215,6 +261,20 @@ export const api = {
     request<ConversationSummary[]>(
       `/public/agents/${encodeURIComponent(slug)}/conversations?visitorId=${encodeURIComponent(visitor)}`,
     ),
+  cancelPublicRun: (slug: string, runId: string, visitor: string) =>
+    request<RunView>(`/public/agents/${encodeURIComponent(slug)}/runs/${runId}/cancel`
+      + `?visitorId=${encodeURIComponent(visitor)}`, { method: 'POST' }),
+  retryPublicRun: (slug: string, runId: string, visitor: string) =>
+    request<StartRunResponse>(`/public/agents/${encodeURIComponent(slug)}/runs/${runId}/retry`
+      + `?visitorId=${encodeURIComponent(visitor)}`, { method: 'POST' }),
+  rewindPublicConversation: (slug: string, conversationId: string, keepSeq: number, visitor: string) =>
+    request<MessageView[]>(
+      `/public/agents/${encodeURIComponent(slug)}/conversations/${conversationId}/rewind`,
+      { method: 'POST', body: JSON.stringify({ keepSeq, visitorId: visitor }) },
+    ),
+  publicRunTraces: (slug: string, runId: string, visitor: string) =>
+    request<TraceSpan[]>(`/public/agents/${encodeURIComponent(slug)}/runs/${runId}/traces`
+      + `?visitorId=${encodeURIComponent(visitor)}`),
   publicMessages: (slug: string, conversationId: string, visitor: string) =>
     request<MessageView[]>(
       `/public/agents/${encodeURIComponent(slug)}/conversations/${conversationId}/messages`

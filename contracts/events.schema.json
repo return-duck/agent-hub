@@ -124,6 +124,22 @@
             "estimated": {
               "type": "boolean",
               "description": "token 数是否由「4 字符≈1 token」估算得出（模型未返回 usage 时为 true）"
+            },
+            "input": {
+              "type": "string",
+              "description": "本次模型调用实际发送的输入（按 role 前缀渲染的文本，超长会截断）"
+            },
+            "output": {
+              "type": "string",
+              "description": "本次模型调用返回的文本（超长会截断）"
+            },
+            "inputTruncated": {
+              "type": "boolean",
+              "description": "input 是否被截断"
+            },
+            "outputTruncated": {
+              "type": "boolean",
+              "description": "output 是否被截断"
             }
           }
         }
@@ -145,6 +161,10 @@
           "properties": {
             "toolName": { "type": "string" },
             "callId": { "type": "string" },
+            "kind": {
+              "enum": ["tool", "mcp", "skill"],
+              "description": "调用类别：本地工具 / MCP 工具 / 技能。分别以不同类别记录进调用轨迹"
+            },
             "args": {}
           }
         }
@@ -166,6 +186,10 @@
           "properties": {
             "toolName": { "type": "string" },
             "callId": { "type": "string" },
+            "kind": {
+              "enum": ["tool", "mcp", "skill"],
+              "description": "调用类别：本地工具 / MCP 工具 / 技能"
+            },
             "durationMs": { "type": "number" },
             "result": { "type": "string" },
             "isError": { "type": "boolean" },
@@ -251,7 +275,10 @@
           "type": "object",
           "required": ["status", "durationMs"],
           "properties": {
-            "status": { "enum": ["SUCCEEDED", "FAILED"] },
+            "status": {
+              "enum": ["SUCCEEDED", "FAILED", "CANCELLED"],
+              "description": "CANCELLED 表示被用户主动中断；已产出的事件仍然有效，可据此重试"
+            },
             "durationMs": { "type": "number" },
             "answer": { "type": ["string", "null"] },
             "totals": {

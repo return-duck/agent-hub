@@ -27,6 +27,10 @@ public class Run {
     @Column(name = "status", length = 16, nullable = false)
     private RunStatus status;
 
+    /** 这一轮是重试哪一次 run（断点重试的血缘，便于轨迹页把重试串起来） */
+    @Column(name = "retry_of_run_id", length = 36)
+    private String retryOfRunId;
+
     @Column(name = "input_json", columnDefinition = "LONGTEXT")
     private String inputJson;
 
@@ -55,6 +59,14 @@ public class Run {
         this.startedAt = startedAt;
     }
 
+    public void markRetryOf(String originalRunId) {
+        this.retryOfRunId = originalRunId;
+    }
+
+    public String getRetryOfRunId() {
+        return retryOfRunId;
+    }
+
     public void markRunning() {
         this.status = RunStatus.RUNNING;
     }
@@ -62,6 +74,18 @@ public class Run {
     public void markSucceeded(String answer, Instant finishedAt) {
         this.status = RunStatus.SUCCEEDED;
         this.answer = answer;
+        this.finishedAt = finishedAt;
+    }
+
+    /**
+     * 被用户中断。
+     *
+     * 刻意保留已经产出的部分回答：中断的语义是"停下来"，不是"这次白跑了" ——
+     * 用户接下来要么修改上一条消息重发，要么直接原样重试，两种都需要看到已经跑出什么。
+     */
+    public void markCancelled(String partialAnswer, Instant finishedAt) {
+        this.status = RunStatus.CANCELLED;
+        this.answer = partialAnswer;
         this.finishedAt = finishedAt;
     }
 

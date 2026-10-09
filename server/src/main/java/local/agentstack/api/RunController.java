@@ -1,5 +1,6 @@
 package local.agentstack.api;
 
+import jakarta.validation.Valid;
 import local.agentstack.api.dto.RunDtos;
 import local.agentstack.auth.CurrentUser;
 import local.agentstack.domain.AppUser;
@@ -38,6 +39,25 @@ public class RunController {
         RunDtos.StartRequest safe = request == null ? new RunDtos.StartRequest(null, null) : request;
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(runService.startForOwner(user.getId(), agentId, safe));
+    }
+
+    /** 中断运行。幂等：已经结束的 run 也会得到一个正常的当前状态。 */
+    @PostMapping("/runs/{runId}/cancel")
+    public RunDtos.RunView cancel(@CurrentUser AppUser user, @PathVariable String runId) {
+        return runService.cancel(user.getId(), runId);
+    }
+
+    /** 断点重试：回退到这一轮之前，用同样的输入重跑。 */
+    @PostMapping("/runs/{runId}/retry")
+    public ResponseEntity<RunDtos.StartResponse> retry(@CurrentUser AppUser user, @PathVariable String runId) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(runService.retry(user.getId(), runId));
+    }
+
+    /** 会话回退：删掉 seq > keepSeq 的消息及其 run。用于"改上一条并重发"。 */
+    @PostMapping("/conversations/{conversationId}/rewind")
+    public List<RunDtos.MessageView> rewind(@CurrentUser AppUser user, @PathVariable String conversationId,
+                                            @Valid @RequestBody RunDtos.RewindRequest request) {
+        return runService.rewind(user.getId(), conversationId, request.keepSeq());
     }
 
     @GetMapping("/runs/{runId}")

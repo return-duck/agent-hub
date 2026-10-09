@@ -10,7 +10,7 @@
 import type { ProtocolEvent } from '../generated/events.js';
 
 export type NodeRunState = 'idle' | 'running' | 'ok' | 'error';
-export type RunStatus = 'idle' | 'running' | 'succeeded' | 'failed';
+export type RunStatus = 'idle' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface ChatMessage {
   id: string;
@@ -201,7 +201,12 @@ export function reduceRunEvent(state: RunState, event: ProtocolEvent): RunState 
       return {
         ...state,
         events,
-        status: event.payload.status === 'SUCCEEDED' ? 'succeeded' : 'failed',
+        // 中断不是失败：单独立一个状态，界面才能给出「改一下重发 / 重试」的入口
+        status: event.payload.status === 'SUCCEEDED'
+          ? 'succeeded'
+          : event.payload.status === 'CANCELLED'
+            ? 'cancelled'
+            : 'failed',
         totals: normalizeTotals(event.payload.totals),
         durationMs: event.payload.durationMs,
         ...(state.streamingText

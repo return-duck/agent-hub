@@ -23,15 +23,19 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 /**
  * 一次 run 的编排：消费 runtime 的 NDJSON 事件流，分配 seq，落库，再推给 SSE 订阅者。
  *
- * 三条不变量（都有测试覆盖）：
+ * 四条不变量（都有测试覆盖）：
  *  1) seq 只由本类分配，单调递增，与落库顺序一致 —— 浏览器靠它判重与续传。
  *  2) 先落库再 publish —— 任何"客户端看到的事件"都一定已经在库里。
- *  3) 无论成功、失败、超时还是 runtime 连不上，run 一定被写成终态并收到终态事件。
+ *  3) 无论成功、失败、超时、被中断还是 runtime 连不上，run 一定被写成终态并收到终态事件。
+ *  4) 轨迹（trace_span）是旁路：写轨迹失败绝不影响运行本身。
  */
 @Service
 public class RunOrchestrator {
@@ -43,17 +47,22 @@ public class RunOrchestrator {
     private final RunEventRepository eventRepo;
     private final MessageRepository messageRepo;
     private final RunEventBroadcaster broadcaster;
+    private final TraceRecorder traceRecorder;
     private final ObjectMapper mapper;
     private final AppProperties props;
 
+    /** 正在执行的 run。中断就是从这里找到它并掐断 runtime 事件流。 */
+    private final Map<String, RunHandle> active = new ConcurrentHashMap<>();
+
     public RunOrchestrator(RuntimeClient runtime, RunRepository runRepo, RunEventRepository eventRepo,
                            MessageRepository messageRepo, RunEventBroadcaster broadcaster,
-                           ObjectMapper mapper, AppProperties props) {
+                           TraceRecorder traceRecorder, ObjectMapper mapper, AppProperties props) {
         this.runtime = runtime;
         this.runRepo = runRepo;
         this.eventRepo = eventRepo;
         this.messageRepo = messageRepo;
         this.broadcaster = broadcaster;
+        this.traceRecorder = traceRecorder;
         this.mapper = mapper;
         this.props = props;
     }
@@ -70,15 +79,39 @@ public class RunOrchestrator {
         });
     }
 
+    /**
+     * 中断一个正在执行的 run。
+     *
+     * 做法是**关掉 runtime 的事件流**：HTTP 连接一断，Node 侧的 req/res 'close'
+     * 就会 abort 掉正在跑的 LangGraph，不需要额外定义一套取消协议。
+     * 返回 false 表示这个 run 已经不在执行中（可能已结束），调用方按幂等处理即可。
+     */
+    public boolean cancel(String runId) {
+        RunHandle handle = active.get(runId);
+        if (handle == null) {
+            return false;
+        }
+        handle.cancel();
+        return true;
+    }
+
+    public boolean isActive(String runId) {
+        return active.containsKey(runId);
+    }
+
     private void execute(Run run, JsonNode graph, int graphSchemaVersion, Map<String, Object> input,
                          List<RuntimeClient.HistoryMessage> history) {
         String runId = run.getId();
         RunEventChannel channel = broadcaster.channel(runId);
+        RunHandle handle = new RunHandle();
+        active.put(runId, handle);
+
         long startedAt = System.currentTimeMillis();
         int seq = 0;
         boolean terminal = false;
         boolean errorEmitted = false;
         JsonNode errorPayload = null;
+        String lastAssistant = null;
 
         try {
             run.markRunning();
@@ -88,8 +121,12 @@ public class RunOrchestrator {
                     runId, run.getConversationId(), graph, graphSchemaVersion, input, history);
 
             try (Stream<String> lines = runtime.execute(request)) {
+                handle.attach(lines);
                 Iterator<String> it = lines.iterator();
                 while (it.hasNext()) {
+                    if (handle.isCancelled()) {
+                        break;
+                    }
                     String line = it.next();
                     if (line == null || line.isBlank()) {
                         continue;
@@ -123,6 +160,9 @@ public class RunOrchestrator {
                     seq = emit(channel, run, seq, type, nodeId, payload, Timestamps.now());
 
                     if (EventType.MESSAGE_COMPLETED.wire().equals(type)) {
+                        if ("assistant".equals(payload.path("role").asText("assistant"))) {
+                            lastAssistant = textOrNull(payload, "content");
+                        }
                         persistMessage(run, payload);
                     } else if (EventType.RUN_ERROR.wire().equals(type)) {
                         errorPayload = payload;
@@ -132,28 +172,48 @@ public class RunOrchestrator {
                         String status = payload.path("status").asText("SUCCEEDED");
                         String answer = textOrNull(payload, "answer");
                         finishRun(run, status, answer, "SUCCEEDED".equals(status) ? null : errorPayload);
+                        traceRecorder.finish(run, status);
                         break;
                     }
                 }
             }
         } catch (RuntimeClient.RuntimeCallException e) {
-            log.warn("run {} 调用 runtime 失败: {}", runId, e.getMessage());
-            errorPayload = errorNode("RUNTIME_UNAVAILABLE", e.getMessage(), true);
+            if (!handle.isCancelled()) {
+                log.warn("run {} 调用 runtime 失败: {}", runId, e.getMessage());
+                errorPayload = errorNode("RUNTIME_UNAVAILABLE", e.getMessage(), true);
+            }
         } catch (Exception e) {
-            log.error("run {} 执行失败", runId, e);
-            errorPayload = errorNode("INTERNAL", "服务端异常: " + e.getMessage(), false);
+            if (handle.isCancelled()) {
+                // 关闭事件流会让正在阻塞的读抛异常，这是中断的正常路径，不是故障
+                log.info("run {} 已被中断", runId);
+            } else {
+                log.error("run {} 执行失败", runId, e);
+                errorPayload = errorNode("INTERNAL", "服务端异常: " + e.getMessage(), false);
+            }
         } finally {
+            active.remove(runId);
             try {
                 if (!terminal) {
-                    if (errorPayload == null) {
-                        errorPayload = errorNode("INTERNAL", "运行未产出终止事件（连接提前中断）", true);
+                    String finalStatus = handle.isCancelled() ? "CANCELLED" : "FAILED";
+                    if (handle.isCancelled()) {
+                        // 中断时保留已经产出的部分回答：用户接下来要么改消息重发，要么原样重试
+                        seq = emit(channel, run, seq, EventType.RUN_FINISHED.wire(), null,
+                                finishedNode(finalStatus, System.currentTimeMillis() - startedAt, lastAssistant),
+                                Timestamps.now());
+                    } else {
+                        if (errorPayload == null) {
+                            errorPayload = errorNode("INTERNAL", "运行未产出终止事件（连接提前中断）", true);
+                        }
+                        if (!errorEmitted) {
+                            seq = emit(channel, run, seq, EventType.RUN_ERROR.wire(), null, errorPayload,
+                                    Timestamps.now());
+                        }
+                        seq = emit(channel, run, seq, EventType.RUN_FINISHED.wire(), null,
+                                finishedNode(finalStatus, System.currentTimeMillis() - startedAt, null),
+                                Timestamps.now());
                     }
-                    if (!errorEmitted) {
-                        seq = emit(channel, run, seq, EventType.RUN_ERROR.wire(), null, errorPayload, Timestamps.now());
-                    }
-                    seq = emit(channel, run, seq, EventType.RUN_FINISHED.wire(), null,
-                            finishedNode("FAILED", System.currentTimeMillis() - startedAt, null), Timestamps.now());
-                    finishRun(run, "FAILED", null, errorPayload);
+                    finishRun(run, finalStatus, handle.isCancelled() ? lastAssistant : null, errorPayload);
+                    traceRecorder.finish(run, finalStatus);
                 }
             } catch (Exception e) {
                 log.error("run {} 写入终态失败", runId, e);
@@ -174,6 +234,9 @@ public class RunOrchestrator {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("事件 payload 无法序列化", e);
         }
+        // 轨迹挂在"事件已落库"之后：事件是真源，轨迹是从它投影出来的视图。
+        // 放在这里也让所有分支（成功/失败/中断）都自动获得轨迹，不需要各自记得写。
+        traceRecorder.record(run, type, nodeId, safe, ts);
         channel.publish(new ProtocolEvent(next, type, run.getId(), nodeId, safe, ts));
         return next;
     }
@@ -190,10 +253,10 @@ public class RunOrchestrator {
 
     private void finishRun(Run run, String status, String answer, JsonNode error) {
         Instant now = Timestamps.now();
-        if ("SUCCEEDED".equals(status)) {
-            run.markSucceeded(answer, now);
-        } else {
-            run.markFailed(error == null ? null : error.toString(), now);
+        switch (status) {
+            case "SUCCEEDED" -> run.markSucceeded(answer, now);
+            case "CANCELLED" -> run.markCancelled(answer, now);
+            default -> run.markFailed(error == null ? null : error.toString(), now);
         }
         runRepo.save(run);
     }
@@ -225,5 +288,39 @@ public class RunOrchestrator {
 
     private static String abbreviate(String s) {
         return s.length() <= 200 ? s : s.substring(0, 200) + "...";
+    }
+
+    /** 执行中 run 的句柄：中断 = 置位 + 关掉事件流。 */
+    private static final class RunHandle {
+        private final AtomicBoolean cancelled = new AtomicBoolean(false);
+        private final AtomicReference<Stream<String>> stream = new AtomicReference<>();
+
+        boolean isCancelled() {
+            return cancelled.get();
+        }
+
+        void attach(Stream<String> lines) {
+            stream.set(lines);
+            // 极端情况：中断请求早于流建立，这里补一次关闭，避免"点了暂停却继续跑"
+            if (cancelled.get()) {
+                closeQuietly(lines);
+            }
+        }
+
+        void cancel() {
+            cancelled.set(true);
+            closeQuietly(stream.get());
+        }
+
+        private static void closeQuietly(Stream<String> lines) {
+            if (lines == null) {
+                return;
+            }
+            try {
+                lines.close();
+            } catch (Exception ignored) {
+                // 关闭失败没有补救手段，也不该影响终态写入
+            }
+        }
     }
 }

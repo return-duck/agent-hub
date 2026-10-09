@@ -109,6 +109,8 @@ export interface StudioState {
   selectedNodeId: string | null;
 
   run: RunState;
+  /** 当前正在跑（或最近一次跑）的 run，用于中断与断点重试 */
+  runId: string | null;
   conversationId: string | null;
   subscription: RunSubscription | null;
 
@@ -133,6 +135,8 @@ export interface StudioState {
   publishAgent: () => Promise<void>;
   unpublishAgent: () => Promise<void>;
   runWithInput: (input: Record<string, unknown>) => Promise<void>;
+  cancelRun: () => Promise<void>;
+  retryRun: () => Promise<void>;
   resetRun: () => void;
 }
 
@@ -153,6 +157,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   selectedNodeId: null,
 
   run: initialRunState,
+  runId: null,
   conversationId: null,
   subscription: null,
 
@@ -373,7 +378,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
     try {
       const { runId, conversationId } = await api.startRun(agentId, input, get().conversationId ?? undefined);
-      set({ conversationId });
+      set({ conversationId, runId });
       const subscription = subscribeToRun(
         runId,
         (event) => set((current) => ({ run: reduceRunEvent(current.run, event) })),
@@ -388,9 +393,39 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
   },
 
+  /** 中断当前运行。服务端会收敛成 CANCELLED 并通过事件流回传。 */
+  cancelRun: async () => {
+    const runId = get().runId;
+    if (!runId) return;
+    try {
+      await api.cancelRun(runId);
+    } catch (error) {
+      set({ notice: { kind: 'error', text: describe(error) } });
+    }
+  },
+
+  /** 断点重试：服务端把这一轮回退掉再用同样的输入重跑。 */
+  retryRun: async () => {
+    const { runId, subscription } = get();
+    if (!runId) return;
+    subscription?.close();
+    try {
+      const { runId: nextRunId, conversationId } = await api.retryRun(runId);
+      set({ runId: nextRunId, conversationId, run: { ...initialRunState, status: 'running' }, notice: null });
+      const next = subscribeToRun(
+        nextRunId,
+        (event) => set((current) => ({ run: reduceRunEvent(current.run, event) })),
+        (message) => set({ notice: { kind: 'info', text: message } }),
+      );
+      set({ subscription: next });
+    } catch (error) {
+      set({ notice: { kind: 'error', text: describe(error) } });
+    }
+  },
+
   resetRun: () => {
     get().subscription?.close();
-    set({ run: initialRunState, subscription: null, conversationId: null });
+    set({ run: initialRunState, runId: null, subscription: null, conversationId: null });
   },
 }));
 

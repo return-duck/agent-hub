@@ -19,6 +19,9 @@ export function RunPanel() {
   const [fallback, setFallback] = useState('(12+8)*3');
 
   const busy = run.status === 'running';
+  const cancelRun = useStudio((s) => s.cancelRun);
+  const retryRun = useStudio((s) => s.retryRun);
+  const canResume = !busy && (run.status === 'failed' || run.status === 'cancelled');
 
   const submit = (): void => {
     const input: Record<string, unknown> = {};
@@ -65,6 +68,15 @@ export function RunPanel() {
           <button className="btn btn-primary" disabled={busy} onClick={submit}>
             {busy ? '运行中…' : '▶ 运行'}
           </button>
+          {busy ? (
+            <button className="btn" type="button" onClick={() => void cancelRun()}>
+              暂停
+            </button>
+          ) : (
+            <button className="btn" type="button" onClick={() => void retryRun()} disabled={!canResume}>
+              重试这一轮
+            </button>
+          )}
           <button className="btn" onClick={resetRun} disabled={run.status === 'idle'}>
             清空
           </button>
@@ -109,11 +121,12 @@ function RunSummary() {
 
   const running = run.status === 'running';
   const ok = run.status === 'succeeded';
+  const cancelled = run.status === 'cancelled';
 
   return (
-    <div className={`run-summary ${ok ? 'ok' : running ? 'running' : 'failed'}`}>
+    <div className={`run-summary ${ok ? 'ok' : running ? 'running' : cancelled ? 'cancelled' : 'failed'}`}>
       <span className="run-summary__status">
-        {running ? '● 运行中' : ok ? '✓ 成功' : '✕ 失败'}
+        {running ? '● 运行中' : ok ? '✓ 成功' : cancelled ? '⏸ 已暂停' : '✕ 失败'}
       </span>
       {run.durationMs !== null && <span>耗时 {run.durationMs} ms</span>}
       {run.usage && (

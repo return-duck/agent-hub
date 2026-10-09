@@ -1171,3 +1171,250 @@ textarea {
   color: var(--text);
   font-weight: 600;
 }
+
+/* ==========================================================================
+   中断对话 / 编辑重发 / 调用轨迹
+   ========================================================================== */
+
+/* 暂停/失败后，最后一条用户消息上的操作入口 */
+.msg__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.run-summary.cancelled {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* ---------------- 对话内联的轨迹 ---------------- */
+.trace-inline {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  max-width: 760px;
+}
+
+.trace-inline__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.trace-inline__span {
+  border-top: 1px solid var(--line);
+  padding: 5px 0;
+}
+
+.trace-inline__span > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.trace-inline__name {
+  color: var(--text);
+}
+
+.trace-inline__ms {
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.trace-inline__io {
+  margin: 6px 0 2px;
+  padding: 7px 9px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* ---------------- 工作室的轨迹面板 ---------------- */
+.trace-panel {
+  padding: 0 12px 8px;
+}
+
+.trace-panel__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-soft-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 7px 9px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.trace-panel__hint {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.trace-panel__body {
+  margin-top: 8px;
+}
+
+.trace-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+
+.trace-panel__runs {
+  max-height: 190px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.trace-run {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: center;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 5px 7px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11.5px;
+}
+
+.trace-run:hover {
+  border-color: var(--line);
+}
+
+.trace-run--active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: var(--primary);
+}
+
+.trace-run__time {
+  color: var(--text-dim);
+}
+
+.trace-run__meta {
+  grid-column: 2;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.trace-run__preview {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-panel__spans {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.trace-span {
+  border-top: 1px solid var(--line);
+  padding: 5px 0;
+}
+
+.trace-span > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.trace-span__seq {
+  color: var(--text-dim);
+  min-width: 16px;
+  text-align: right;
+}
+
+.trace-span__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-span__node {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.trace-span__ms {
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.trace-span__status {
+  color: var(--warn);
+}
+
+.trace-span__body {
+  padding: 5px 0 2px 22px;
+}
+
+.trace-span__attrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.trace-span__attr {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: var(--bg-soft-2);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.trace-span__io {
+  margin: 4px 0;
+  padding: 7px 9px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.trace-empty {
+  color: var(--text-dim);
+  font-size: 11.5px;
+  padding: 4px 2px;
+}
+
+.trace-empty--error {
+  color: #fca5a5;
+}

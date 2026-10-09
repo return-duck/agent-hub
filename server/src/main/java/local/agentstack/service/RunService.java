@@ -26,6 +26,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -82,6 +84,11 @@ public class RunService {
     }
 
     private RunDtos.StartResponse startInternal(Agent agent, RunDtos.StartRequest request, String visitorId) {
+        return startInternal(agent, request, visitorId, null);
+    }
+
+    private RunDtos.StartResponse startInternal(Agent agent, RunDtos.StartRequest request, String visitorId,
+                                               String retryOfRunId) {
         JsonNode graph = readTree(agent.getGraphJson());
         Map<String, Object> input = request.input() == null ? Map.of() : request.input();
         Instant now = Timestamps.now();
@@ -103,6 +110,11 @@ public class RunService {
 
         Run run = new Run(UUID.randomUUID().toString(), conversation.getId(), agent.getId(),
                 RunStatus.QUEUED, writeJson(input), now);
+        if (retryOfRunId != null) {
+            // 血缘必须在创建时就带上：run 落库后编排线程会立刻在自己的事务里再保存一次，
+            // "先建后改"的写法会被那次保存覆盖掉（这个坑被 InterruptTraceIT 抓出来过）。
+            run.markRetryOf(retryOfRunId);
+        }
         runRepo.save(run);
 
         messageRepo.save(new Message(UUID.randomUUID().toString(), conversation.getId(), run.getId(),
@@ -124,6 +136,111 @@ public class RunService {
         }
 
         return new RunDtos.StartResponse(run.getId(), conversation.getId());
+    }
+
+    // ---------------------------------------------------------------- 中断 / 回退 / 重试
+
+    /**
+     * 中断一次运行。
+     *
+     * 幂等：run 已经结束时 cancel 返回 false，接口仍然返回当前状态，
+     * 前端不需要区分"刚停下"和"早就结束了"。
+     */
+    @Transactional
+    public RunDtos.RunView cancel(String ownerId, String runId) {
+        requireOwnedRun(ownerId, runId);
+        orchestrator.cancel(runId);
+        return toView(runRepo.findById(runId).orElseThrow(() -> ApiException.notFound("run", runId)));
+    }
+
+    @Transactional
+    public RunDtos.RunView cancelPublic(String slug, String visitorId, String runId) {
+        requirePublicRun(slug, visitorId, runId);
+        orchestrator.cancel(runId);
+        return toView(runRepo.findById(runId).orElseThrow(() -> ApiException.notFound("run", runId)));
+    }
+
+    /**
+     * 会话回退：删掉 seq &gt; keepSeq 的消息及其所属 run。
+     *
+     * 这是"修改上一条消息并重发"的基础 —— 先退回到那条消息之前，
+     * 再用新内容发起一轮；否则旧回答会作为历史继续影响新问题。
+     * 删除 run 会级联清掉它的 run_event 与 trace_span，不会留下孤儿轨迹。
+     */
+    @Transactional
+    public List<RunDtos.MessageView> rewind(String ownerId, String conversationId, int keepSeq) {
+        requireOwnedConversation(ownerId, conversationId);
+        return rewindInternal(conversationId, keepSeq);
+    }
+
+    @Transactional
+    public List<RunDtos.MessageView> rewindPublic(String slug, String visitorId, String conversationId, int keepSeq) {
+        Agent agent = agentService.requirePublic(slug);
+        requireVisitorConversation(agent.getId(), requireVisitor(visitorId), conversationId);
+        return rewindInternal(conversationId, keepSeq);
+    }
+
+    private List<RunDtos.MessageView> rewindInternal(String conversationId, int keepSeq) {
+        // 先停掉这一会话上还在跑的轮次：否则它会在回退之后继续往会话里写消息
+        for (Run active : runRepo.findByConversationIdAndStatusIn(conversationId, ACTIVE_STATUSES)) {
+            orchestrator.cancel(active.getId());
+        }
+        List<Message> doomed = messageRepo
+                .findByConversationIdAndSeqGreaterThanOrderBySeqAsc(conversationId, keepSeq);
+        Set<String> runIds = doomed.stream().map(Message::getRunId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        messageRepo.deleteAll(doomed);
+        if (!runIds.isEmpty()) {
+            runRepo.deleteAllById(runIds);
+        }
+        return messageRepo.findByConversationIdOrderBySeqAsc(conversationId).stream().map(this::toView).toList();
+    }
+
+    /** 断点重试：从这一轮之前重新跑同样的输入。 */
+    @Transactional
+    public RunDtos.StartResponse retry(String ownerId, String runId) {
+        Run original = requireOwnedRun(ownerId, runId);
+        Agent agent = agentService.require(original.getAgentId(), ownerId);
+        return retryInternal(agent, original, null);
+    }
+
+    @Transactional
+    public RunDtos.StartResponse retryPublic(String slug, String visitorId, String runId) {
+        Agent agent = agentService.requirePublic(slug);
+        String visitor = requireVisitor(visitorId);
+        Run original = runRepo.findById(runId).orElseThrow(() -> ApiException.notFound("run", runId));
+        requireVisitorConversation(agent.getId(), visitor, original.getConversationId());
+        return retryInternal(agent, original, visitor);
+    }
+
+    /**
+     * 断点重试的实现。
+     *
+     * 粒度是【一轮】而不是【一个节点】：runtime 被刻意设计成无状态（历史每次从 MySQL 全量下发），
+     * 所以"断点"就是上一次完整轮次的边界。半截输出先被回退掉，再用同样的输入重跑 ——
+     * 这样重试不会把失败的部分喂回模型当作上下文。
+     */
+    private RunDtos.StartResponse retryInternal(Agent agent, Run original, String visitorId) {
+        Map<String, Object> input = readInput(original.getInputJson());
+        Integer userSeq = messageRepo.findFirstByRunIdAndRoleOrderBySeqAsc(original.getId(), "user")
+                .map(Message::getSeq).orElse(null);
+        if (userSeq != null) {
+            rewindInternal(original.getConversationId(), userSeq - 1);
+        }
+        return startInternal(agent, new RunDtos.StartRequest(input, original.getConversationId()),
+                visitorId, original.getId());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readInput(String inputJson) {
+        if (inputJson == null || inputJson.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return mapper.readValue(inputJson, Map.class);
+        } catch (JsonProcessingException e) {
+            return Map.of();
+        }
     }
 
     // ---------------------------------------------------------------- 读（主人）
@@ -201,6 +318,12 @@ public class RunService {
         Run run = runRepo.findById(runId).orElseThrow(() -> ApiException.notFound("run", runId));
         requireOwnedConversation(ownerId, run.getConversationId());
         return run;
+    }
+
+    /** 供轨迹查询等只读接口复用的归属校验。 */
+    @Transactional(readOnly = true)
+    public void requireConversationAccess(String ownerId, String conversationId) {
+        requireOwnedConversation(ownerId, conversationId);
     }
 
     private Conversation requireOwnedConversation(String ownerId, String conversationId) {
