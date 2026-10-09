@@ -82,7 +82,7 @@ bash deploy/split/deploy.sh verify    # 端到端验收
 两个 unit 都写了 `StartLimitIntervalSec=300` / `StartLimitBurst=5`：
 内存不足被 OOM Kill 时最多重启 5 次就停手，**不会**像早先那版那样每 5 秒重启一次把整机拖死。
 
-## 踩过的三个坑（已在代码里修掉）
+## 踩过的四个坑（已在代码里修掉）
 
 1. **模板里写死路径**：`APP_DIR` 可配置，但 nginx/systemd 模板写死了 `/home/admin/agent-stack`，
    配置一旦不同就会出现"单元指向不存在的目录"。现在模板用 `__APP_DIR__` 等占位符，
@@ -98,3 +98,16 @@ bash deploy/split/deploy.sh verify    # 端到端验收
    现在：① `umask` 用子 shell 限定作用域；② 打包后 `chmod -R a+rX` 归一化；
    ③ 服务器解包后再次归一化（目录 755 / 文件 644）；④ `do_web` 增加就绪校验 ——
    只检查"文件放好了"不够，必须确认 nginx 真能读到（403 就是读不到）。
+
+4. **反代时 `Host` 不带端口，导致所有浏览器 POST 被 403 "Invalid CORS request"**
+   现象：页面能打开、agent 列表能加载，但一"新建 agent"就报
+   `POST /api/agents → 403 Forbidden`。
+   原因：nginx 原本写 `proxy_set_header Host $host;`，而 **`$host` 不包含端口**。
+   于是后端把自己的地址算成 `116.62.47.207:18080`，与浏览器送来的
+   `Origin: http://116.62.47.207:8080` 不同源 → Spring 判定为跨域请求 →
+   启用 CORS 校验 → 白名单里只有开发用的 `localhost:5173` → 直接 403。
+   （这也解释了为什么 `Origin: http://116.62.47.207` 不带端口时反而能通过。）
+   修法：① 两处代理都改用 **`$http_host`**（保留端口，同源判定成立，CORS 根本不启用）；
+   ② 仍然把真实访问地址写进 `AGENT_STACK_CORS_ORIGINS` 作为第二道保险
+   （`WebConfig` 用的是 `allowedOrigins` 精确匹配且开了 `allowCredentials`，
+   所以必须逐个列出，不能用 `*`）。

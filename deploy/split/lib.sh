@@ -32,6 +32,12 @@ set -a; source "$CONFIG"; set +a
 # 端点覆盖变量在运行时里叫 MODEL_BASE_URL（不是 OPENAI_BASE_URL），这里兼容两种写法，
 # 免得"填了 OPENAI_BASE_URL 却不生效"这种查不出原因的坑。
 : "${MODEL_BASE_URL:=${OPENAI_BASE_URL:-}}"
+
+# 浏览器 POST 一定带 Origin 头。虽然修好 Host 转发后同源请求不会再触发 CORS 校验，
+# 这里仍然把真实访问地址放进白名单，作为第二道保险（例如以后换域名/换端口访问）。
+# 注意 WebConfig 用的是 allowedOrigins（精确匹配，不支持通配符）且开了 allowCredentials，
+# 所以必须逐个列出，不能用 "*"。
+: "${CORS_ORIGINS:=http://${DEPLOY_HOST}:${APP_PORT},http://${DEPLOY_HOST},http://localhost:5173,http://127.0.0.1:5173}"
 : "${DEEPSEEK_API_KEY:=}"
 : "${OPENAI_API_KEY:=}"
 
