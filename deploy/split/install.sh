@@ -359,7 +359,9 @@ do_config() {
   write_envs
   echo "--- server.env ---"; sed -E 's/(PASSWORD=).*/\1********/' "$APP_DIR/shared/server.env" | sed 's/^/  /'
   echo "--- runtime.env（key 已脱敏）---"
-  sed -E 's/(API_KEY=)(.+)/\1********(长度 \2)/; s/(API_KEY=)$/\1(空，将降级为脚本化模型)/' "$APP_DIR/shared/runtime.env" | sed 's/^/  /'
+  # 注意：这里【绝不能】把 \2（值）回显出来 —— 之前写成 "长度 \2" 导致完整 key
+  # 被打印到部署日志里，属于实打实的凭据泄露。只报"是否已设置"。
+  sed -E 's/(API_KEY=)(.+)/\1********（已设置）/' "$APP_DIR/shared/runtime.env" | sed 's/^/  /'
 
   systemctl reset-failed agent-stack-runtime 2>/dev/null || true
   systemctl restart agent-stack-runtime
