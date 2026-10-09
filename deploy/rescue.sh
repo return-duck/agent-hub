@@ -39,9 +39,8 @@ SSH_BASE=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=25 -o IPQoS=none
           -o ServerAliveInterval=10 -p "$PORT")
 USE_ASKPASS=0
 KEY="${DEPLOY_SSH_KEY/#\~/$HOME}"
-if [ -n "${DEPLOY_SSH_KEY:-}" ] && [ -f "$KEY" ]; then
-  SSH_BASE+=(-i "$KEY")
-elif [ -n "${DEPLOY_HOST_PASSWORD:-}" ]; then
+# 优先密码：deploy.env 里的 DEPLOY_SSH_KEY 本机存在但服务器未必授权
+if [ -n "${DEPLOY_HOST_PASSWORD:-}" ]; then
   ASKPASS="$(mktemp)"; trap 'rm -f "$ASKPASS"' EXIT
   cat > "$ASKPASS" <<ASK
 #!/bin/sh
@@ -50,8 +49,10 @@ ASK
   chmod 700 "$ASKPASS"
   USE_ASKPASS=1
   SSH_BASE+=(-o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1)
+elif [ -n "${DEPLOY_SSH_KEY:-}" ] && [ -f "$KEY" ]; then
+  SSH_BASE+=(-i "$KEY")
 else
-  die "deploy.env 里既没有可用的 DEPLOY_SSH_KEY，也没有 DEPLOY_HOST_PASSWORD"
+  die "deploy.env 里既没有 DEPLOY_HOST_PASSWORD，也没有可用的 DEPLOY_SSH_KEY"
 fi
 
 sshrun() {

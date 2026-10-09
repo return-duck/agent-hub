@@ -282,6 +282,25 @@ bash deploy/deploy.sh
 单一 origin、无需 CORS、无需 nginx、安全组只需放行一个端口。
 想让前端独立部署（CDN/nginx）就把 `SERVE_WEB=false`，并用 [web/nginx.conf](web/nginx.conf) 托管。
 
+### 部署方式：三包分离（推荐）
+
+前端、Java、Node **各自独立打包、独立上传、独立启动**，前端由 nginx 托管并反代 `/api`：
+
+```bash
+bash deploy/split/deploy.sh init      # 一次性
+bash deploy/split/deploy.sh web       # 只更新前端
+bash deploy/split/deploy.sh server    # 只更新 Java
+bash deploy/split/deploy.sh runtime   # 只更新 Node
+bash deploy/split/deploy.sh verify    # 端到端验收
+```
+
+拓扑：`浏览器 :8080 → nginx →┬ / → web/（静态）  └ /api/ → 127.0.0.1:18080（Java）→ 127.0.0.1:8090（Node）`
+
+详见 [`deploy/split/README.md`](deploy/split/README.md)。
+
+> 旧的单端口方式（前端打进 jar、由 jar 自己监听端口）仍保留在 `deploy/deploy.sh`，
+> 适合不想引入 nginx 的场景；日常更新前端用三包分离更省事（600KB vs 51MB）。
+
 ### ⚠️ 内存是这套部署的硬约束（真实踩坑记录）
 
 一次真实部署事故：**1674MB 的 ECS** 上，MySQL + 既有 Java 应用 + 本项目 Node runtime + 本项目

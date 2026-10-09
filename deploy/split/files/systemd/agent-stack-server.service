@@ -1,0 +1,34 @@
+[Unit]
+Description=Agent Stack server (Java / Spring Boot)
+Documentation=file://__APP_DIR__
+After=network-online.target mysqld.service
+Wants=network-online.target
+# 内存不足时 JVM 会被 OOM Kill；没有频率限制的话 systemd 会每几秒重启一次、
+# 每次重新申请堆内存，把整机拖到连 sshd 都发不出 banner（这个故障现场真实发生过）。
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=__RUN_AS__
+Group=__RUN_AS__
+WorkingDirectory=__APP_DIR__/server
+EnvironmentFile=__APP_DIR__/shared/server.env
+
+# 只监听本机：对外由 nginx 统一收口（8080）
+ExecStart=__JAVA_BIN__ \
+    -Xms256m -Xmx256m -XX:MaxMetaspaceSize=128m -Xss512k \
+    -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError \
+    -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=__APP_DIR__/server/logs \
+    -Duser.timezone=UTC \
+    -jar __APP_DIR__/server/agent-stack-server.jar \
+    --server.address=127.0.0.1
+
+Restart=on-failure
+RestartSec=15
+SuccessExitStatus=143
+TimeoutStopSec=30
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
