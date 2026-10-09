@@ -7,6 +7,9 @@ import react from '@vitejs/plugin-react';
  * 生产环境由静态服务器把 /api 反代到 server 即可，前端代码不需要改。
  */
 export default defineConfig({
+  // 相对基址：产物里的资源引用是 './assets/...'，
+  // 于是同一份 dist 既能挂在 /（8080 根路径）也能挂在 /studio/（80 端子路径）。
+  base: './',
   plugins: [react()],
   server: {
     port: 5173,

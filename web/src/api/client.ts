@@ -4,6 +4,15 @@
  * 浏览器【只】与 server 通信：单一 origin、单一 CORS 点、单一鉴权点，
  * 而且 run 的执行与落库完全不依赖浏览器是否在场（关掉页面 run 照样跑完）。
  */
+/**
+ * API 前缀刻意用【相对路径】（"api/..." 而不是 "/api/..."）。
+ *
+ * 原因：同一份构建产物要能挂在两种位置 ——
+ *   根路径   http://<ip>:8080/         → 浏览器解析成 /api/...
+ *   子路径   http://<ip>/studio/       → 浏览器解析成 /studio/api/...
+ * 后者用于在 80 端口上提供访问（部分网络会屏蔽 8080 这类非标准端口）。
+ * 用绝对路径 "/api/..." 的话，挂在子路径下就会请求到根路径去，直接 404。
+ */
 import type { AgentGraph } from '../generated/agent-graph.js';
 import type { ProtocolEvent } from '../generated/events.js';
 
@@ -108,28 +117,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listAgents: () => request<AgentSummary[]>('/api/agents'),
-  getAgent: (id: string) => request<AgentDetail>(`/api/agents/${id}`),
+  listAgents: () => request<AgentSummary[]>('api/agents'),
+  getAgent: (id: string) => request<AgentDetail>(`api/agents/${id}`),
   createAgent: (name: string, description: string, graph: AgentGraph) =>
-    request<AgentDetail>('/api/agents', {
+    request<AgentDetail>('api/agents', {
       method: 'POST',
       body: JSON.stringify({ name, description, graph }),
     }),
   updateAgent: (id: string, name: string, description: string, graph: AgentGraph) =>
-    request<AgentDetail>(`/api/agents/${id}`, {
+    request<AgentDetail>(`api/agents/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ name, description, graph }),
     }),
-  deleteAgent: (id: string) => request<void>(`/api/agents/${id}`, { method: 'DELETE' }),
-  capabilities: () => request<Capabilities>('/api/capabilities'),
+  deleteAgent: (id: string) => request<void>(`api/agents/${id}`, { method: 'DELETE' }),
+  capabilities: () => request<Capabilities>('api/capabilities'),
   startRun: (agentId: string, input: Record<string, unknown>, conversationId?: string) =>
-    request<StartRunResponse>(`/api/agents/${agentId}/runs`, {
+    request<StartRunResponse>(`api/agents/${agentId}/runs`, {
       method: 'POST',
       body: JSON.stringify({ input, conversationId: conversationId ?? null }),
     }),
-  getRun: (runId: string) => request<RunView>(`/api/runs/${runId}`),
+  getRun: (runId: string) => request<RunView>(`api/runs/${runId}`),
   messagesOfConversation: (conversationId: string) =>
-    request<MessageView[]>(`/api/conversations/${conversationId}/messages`),
+    request<MessageView[]>(`api/conversations/${conversationId}/messages`),
 };
 
 const EVENT_TYPES = [
@@ -163,7 +172,7 @@ export function subscribeToRun(
   onEvent: (event: ProtocolEvent) => void,
   onConnectionIssue: (message: string) => void,
 ): RunSubscription {
-  const source = new EventSource(`/api/runs/${runId}/events`);
+  const source = new EventSource(`api/runs/${runId}/events`);
   let closed = false;
 
   const close = (): void => {

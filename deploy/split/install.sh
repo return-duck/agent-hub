@@ -124,6 +124,25 @@ do_init() {
     die "nginx -t 校验失败，已保留备份；请检查 /etc/nginx/conf.d/agent-stack.conf"
   fi
 
+  step "4b. 安装 80 端口子路径入口 /studio/（备用访问路径）"
+  # 放进 default.d 会【被包含进 80 端口那个 server 块内部】，
+  # 因为你的 nginx.conf 里本来就有 include /etc/nginx/default.d/*.conf;
+  # 所以无需改动 nginx.conf 一个字。用独立前缀，不碰简历站的 /api/。
+  if [ -d /etc/nginx/default.d ]; then
+    render "$SELF_DIR/files/nginx-studio.conf" /tmp/agent-stack-studio.conf || die "studio 模板渲染失败"
+    install -m 644 /tmp/agent-stack-studio.conf /etc/nginx/default.d/agent-stack-studio.conf
+    ln -sfn web "$APP_DIR/studio"
+    if nginx -t 2>&1 | tail -2; then
+      systemctl reload nginx
+      ok "  已启用 http://<ip>/studio/ （不影响原有的 / 简历站）"
+    else
+      rm -f /etc/nginx/default.d/agent-stack-studio.conf
+      warn "  studio 配置校验失败，已回滚该文件（nginx 保持原状）"
+    fi
+  else
+    warn "  没有 /etc/nginx/default.d 目录，跳过 80 端口子路径入口"
+  fi
+
   step "5. 安装 systemd 单元"
   render "$SELF_DIR/files/systemd/agent-stack-server.service"  /tmp/agent-stack-server.service  || die "server 单元渲染失败"
   render "$SELF_DIR/files/systemd/agent-stack-runtime.service" /tmp/agent-stack-runtime.service || die "runtime 单元渲染失败"
@@ -153,6 +172,19 @@ SQL
 
   step "7. 写入各组件配置（权限 600）"
   write_envs
+
+  # init 在第 2 步为了腾端口停掉了服务；若组件已就位就重新拉起，
+  # 否则跑完 init 会出现"服务是停的、API 502"这种看起来像部署失败的假象。
+  if [ -f "$APP_DIR/server/agent-stack-server.jar" ]; then
+    systemctl reset-failed agent-stack-server 2>/dev/null || true
+    systemctl start agent-stack-server 2>/dev/null || true
+    info "  已重新启动 server"
+  fi
+  if [ -f "$APP_DIR/runtime/dist/main.js" ] && [ -d "$APP_DIR/runtime/node_modules" ]; then
+    systemctl reset-failed agent-stack-runtime 2>/dev/null || true
+    systemctl start agent-stack-runtime 2>/dev/null || true
+    info "  已重新启动 runtime"
+  fi
   ok "init 完成"
 }
 
@@ -204,6 +236,11 @@ do_web() {
   find "$APP_DIR/web" -type d -exec chmod 755 {} +
   find "$APP_DIR/web" -type f -exec chmod 644 {} +
   chown -R "$RUN_AS:$RUN_AS" "$APP_DIR/web"
+
+  # 80 端口子路径访问用的软链：studio -> web（相对路径）
+  # 用相对软链的好处：上面的"原子替换"是 mv web web.old; mv web.new web，
+  # 软链指向的是名称 web，所以替换完会自动跟着指向新目录，不需要额外维护。
+  ln -sfn web "$APP_DIR/studio"
 
   nginx -t >/dev/null 2>&1 || die "nginx 配置校验失败"
   systemctl reload nginx

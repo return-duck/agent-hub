@@ -106,6 +106,7 @@ upload_installer() {
   rm -rf "$payload"; mkdir -p "$payload/files/systemd"
   cp "$ROOT/deploy/split/install.sh" "$ROOT/deploy/split/lib.sh" "$payload/"
   cp "$ROOT/deploy/split/files/nginx-agent-stack.conf" "$payload/files/"
+  cp "$ROOT/deploy/split/files/nginx-studio.conf" "$payload/files/"
   cp "$ROOT/deploy/split/files/systemd/"*.service "$payload/files/systemd/"
   chmod +x "$payload/install.sh"
   tar -C "$payload" -czf - . | sshrun "mkdir -p '$REMOTE_INCOMING/deployer' && tar -xzf - -C '$REMOTE_INCOMING/deployer'"
