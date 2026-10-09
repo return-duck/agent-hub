@@ -18,6 +18,10 @@ public class Conversation {
     @Column(name = "agent_id", length = 36, nullable = false)
     private String agentId;
 
+    /** 公开页面来的访客标识（浏览器本地生成）。用于把访客之间的会话隔离开。 */
+    @Column(name = "visitor_id", length = 64)
+    private String visitorId;
+
     @Column(name = "title", length = 255)
     private String title;
 
@@ -27,11 +31,16 @@ public class Conversation {
     protected Conversation() {
     }
 
-    public Conversation(String id, String agentId, String title, Instant createdAt) {
+    public Conversation(String id, String agentId, String visitorId, String title, Instant createdAt) {
         this.id = id;
         this.agentId = agentId;
+        this.visitorId = visitorId;
         this.title = title;
         this.createdAt = createdAt;
+    }
+
+    public String getVisitorId() {
+        return visitorId;
     }
 
     public String getId() {

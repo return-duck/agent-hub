@@ -10,7 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -29,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
@@ -126,6 +131,34 @@ class RunFlowIT {
         jdbc.execute("DELETE FROM run");
         jdbc.execute("DELETE FROM conversation");
         jdbc.execute("DELETE FROM agent");
+        jdbc.execute("DELETE FROM user_session");
+        jdbc.execute("DELETE FROM app_user");
+        token = registerAndGetToken();
+    }
+
+    private String token;
+
+    /** 所有 /api/agents、/api/runs 现在都要求登录，测试里先注册一个用户拿令牌。 */
+    @SuppressWarnings("unchecked")
+    private String registerAndGetToken() {
+        Map<String, Object> body = Map.of(
+                "email", "runner-" + UUID.randomUUID() + "@test.local",
+                "displayName", "集成测试",
+                "password", "password123");
+        ResponseEntity<Map> response = rest.postForEntity("/api/auth/register", body, Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return (String) response.getBody().get("token");
+    }
+
+    private <T> HttpEntity<T> authorized(T body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(token);
+        return new HttpEntity<>(body, headers);
+    }
+
+    private HttpEntity<Void> authorized() {
+        return authorized(null);
     }
 
     @SuppressWarnings("unchecked")
@@ -134,15 +167,16 @@ class RunFlowIT {
                 "name", "集成测试 agent",
                 "description", "由 RunFlowIT 创建",
                 "graph", mapper.convertValue(GraphFixtures.withTools(), Map.class));
-        ResponseEntity<Map> response = rest.postForEntity("/api/agents", body, Map.class);
+        ResponseEntity<Map> response = rest.exchange("/api/agents", HttpMethod.POST, authorized(body), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return (String) response.getBody().get("id");
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> startRun(String agentId, Map<String, Object> input) {
-        ResponseEntity<Map> response = rest.postForEntity(
-                "/api/agents/" + agentId + "/runs", Map.of("input", input), Map.class);
+        ResponseEntity<Map> response = rest.exchange(
+                "/api/agents/" + agentId + "/runs", HttpMethod.POST,
+                authorized(Map.of("input", input)), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         return response.getBody();
     }
@@ -151,7 +185,8 @@ class RunFlowIT {
     private Map<String, Object> awaitTerminal(String runId) {
         long deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline) {
-            Map<String, Object> run = rest.getForObject("/api/runs/" + runId, Map.class);
+            Map<String, Object> run = rest.exchange("/api/runs/" + runId, HttpMethod.GET, authorized(), Map.class)
+                    .getBody();
             Object status = run.get("status");
             if ("SUCCEEDED".equals(status) || "FAILED".equals(status)) {
                 return run;
@@ -167,7 +202,10 @@ class RunFlowIT {
     }
 
     private String readSse(String url) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .header("Authorization", "Bearer " + token)
+                .GET()
+                .build();
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return response.body();
@@ -271,9 +309,9 @@ class RunFlowIT {
         Map<String, Object> first = startRun(agentId, Map.of("topic", "第一轮"));
         awaitTerminal((String) first.get("runId"));
 
-        ResponseEntity<Map> second = rest.postForEntity(
-                "/api/agents/" + agentId + "/runs",
-                Map.of("input", Map.of("topic", "第二轮"), "conversationId", first.get("conversationId")),
+        ResponseEntity<Map> second = rest.exchange(
+                "/api/agents/" + agentId + "/runs", HttpMethod.POST,
+                authorized(Map.of("input", Map.of("topic", "第二轮"), "conversationId", first.get("conversationId"))),
                 Map.class);
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         awaitTerminal((String) second.getBody().get("runId"));
@@ -287,10 +325,10 @@ class RunFlowIT {
     @Test
     @DisplayName("不存在的 run / agent 返回 404 而不是 500")
     void missingResourcesReturn404() {
-        assertThat(rest.getForEntity("/api/runs/does-not-exist", Map.class).getStatusCode())
-                .isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(rest.getForEntity("/api/agents/does-not-exist", Map.class).getStatusCode())
-                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(rest.exchange("/api/runs/does-not-exist", HttpMethod.GET, authorized(), Map.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(rest.exchange("/api/agents/does-not-exist", HttpMethod.GET, authorized(), Map.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     private JsonNode read(Object value) {

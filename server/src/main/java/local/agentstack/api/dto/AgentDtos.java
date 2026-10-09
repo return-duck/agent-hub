@@ -25,6 +25,8 @@ public final class AgentDtos {
             String description,
             int graphSchemaVersion,
             int nodeCount,
+            boolean published,
+            String publicSlug,
             Instant createdAt,
             Instant updatedAt) {
     }
@@ -35,7 +37,25 @@ public final class AgentDtos {
             String description,
             int graphSchemaVersion,
             JsonNode graph,
+            boolean published,
+            String publicSlug,
+            Instant publishedAt,
             Instant createdAt,
             Instant updatedAt) {
+    }
+
+    /**
+     * 公开页面能看到的 agent 信息：只暴露展示所需字段，
+     * 刻意不含 graph —— 分享页的访客没有理由拿到编排细节。
+     */
+    public record PublicView(
+            String slug,
+            String name,
+            String description,
+            Instant publishedAt) {
+    }
+
+    /** 发布结果：slug 即公开链接里的那一段。 */
+    public record PublishResult(String slug, String publicPath, boolean published) {
     }
 }

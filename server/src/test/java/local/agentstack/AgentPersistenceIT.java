@@ -14,7 +14,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +45,9 @@ class AgentPersistenceIT {
     @Autowired
     private ObjectMapper mapper;
 
+    /** 每个用例都换一个新 owner，避免用例之间因为 (owner_id, name) 唯一约束互相干扰 */
+    private String ownerId;
+
     @BeforeEach
     void cleanDatabase() {
         jdbc.execute("DELETE FROM run_event");
@@ -49,6 +55,19 @@ class AgentPersistenceIT {
         jdbc.execute("DELETE FROM run");
         jdbc.execute("DELETE FROM conversation");
         jdbc.execute("DELETE FROM agent");
+        // agent.owner_id 外键指向 app_user，所以用户要放在 agent 之后清
+        jdbc.execute("DELETE FROM user_session");
+        jdbc.execute("DELETE FROM app_user");
+        ownerId = seedUser("owner-" + UUID.randomUUID() + "@test.local");
+    }
+
+    /** 直接插一行用户即可：这里关心的是 agent 的归属约束，不是注册流程本身。 */
+    private String seedUser(String email) {
+        String id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO app_user (id, email, display_name, password_hash, password_salt, created_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)",
+                id, email, "测试用户", "hash", "salt", Timestamp.from(Instant.now()));
+        return id;
     }
 
     private JsonNode validGraph() {
@@ -61,13 +80,14 @@ class AgentPersistenceIT {
         List<String> tables = jdbc.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()",
                 String.class);
-        assertThat(tables).contains("agent", "conversation", "run", "message", "run_event", "flyway_schema_history");
+        assertThat(tables).contains("agent", "conversation", "run", "message", "run_event", "flyway_schema_history",
+                "app_user", "user_session");
     }
 
     @Test
     @DisplayName("新建 agent 后能按 JsonNode 语义读回同一张图（存取往返一致）")
     void roundTripsGraph() {
-        AgentDtos.Detail created = agentService.create(
+        AgentDtos.Detail created = agentService.create(ownerId, 
                 new AgentDtos.SaveRequest("测试 agent", "描述", validGraph()));
 
         assertThat(created.id()).isNotBlank();
@@ -95,7 +115,7 @@ class AgentPersistenceIT {
                 }
                 """);
 
-        assertThatThrownBy(() -> agentService.create(new AgentDtos.SaveRequest("坏图", null, graph)))
+        assertThatThrownBy(() -> agentService.create(ownerId, new AgentDtos.SaveRequest("坏图", null, graph)))
                 .hasMessageContaining("图校验失败")
                 .satisfies(error -> {
                     @SuppressWarnings("unchecked")
@@ -111,8 +131,8 @@ class AgentPersistenceIT {
     @Test
     @DisplayName("同名 agent 冲突返回 CONFLICT 而不是 500")
     void rejectsDuplicateName() {
-        agentService.create(new AgentDtos.SaveRequest("唯一名字", null, validGraph()));
-        assertThatThrownBy(() -> agentService.create(new AgentDtos.SaveRequest("唯一名字", null, validGraph())))
+        agentService.create(ownerId, new AgentDtos.SaveRequest("唯一名字", null, validGraph()));
+        assertThatThrownBy(() -> agentService.create(ownerId, new AgentDtos.SaveRequest("唯一名字", null, validGraph())))
                 .isInstanceOf(local.agentstack.api.ApiException.class)
                 .hasMessageContaining("同名");
     }
@@ -120,23 +140,23 @@ class AgentPersistenceIT {
     @Test
     @DisplayName("更新会覆盖图且保留创建时间，删除会级联清掉会话")
     void updatesAndDeletes() {
-        AgentDtos.Detail created = agentService.create(new AgentDtos.SaveRequest("可改", null, validGraph()));
+        AgentDtos.Detail created = agentService.create(ownerId, new AgentDtos.SaveRequest("可改", null, validGraph()));
         JsonNode minimal = GraphFixtures.minimal();
-        AgentDtos.Detail updated = agentService.update(created.id(), new AgentDtos.SaveRequest("可改2", "新描述", minimal));
+        AgentDtos.Detail updated = agentService.update(created.id(), ownerId, new AgentDtos.SaveRequest("可改2", "新描述", minimal));
 
         assertThat(updated.name()).isEqualTo("可改2");
         assertThat(updated.graph().path("nodes")).hasSize(2);
         assertThat(updated.createdAt()).isEqualTo(created.createdAt());
 
-        agentService.delete(created.id());
+        agentService.delete(created.id(), ownerId);
         assertThat(agentRepository.findById(created.id())).isEmpty();
     }
 
     @Test
     @DisplayName("graph_schema_version 与节点数会出现在列表里，供 UI 展示")
     void listsSummaries() {
-        agentService.create(new AgentDtos.SaveRequest("列表用", null, validGraph()));
-        List<AgentDtos.Summary> list = agentService.list();
+        agentService.create(ownerId, new AgentDtos.SaveRequest("列表用", null, validGraph()));
+        List<AgentDtos.Summary> list = agentService.list(ownerId);
         assertThat(list).hasSize(1);
         assertThat(list.get(0).nodeCount()).isEqualTo(4);
     }

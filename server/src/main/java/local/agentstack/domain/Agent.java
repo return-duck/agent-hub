@@ -15,6 +15,10 @@ public class Agent {
     @Column(name = "id", length = 36, nullable = false)
     private String id;
 
+    /** 归属用户。V1 时代建的 agent 为 null（部署期的验证数据），不属于任何用户。 */
+    @Column(name = "owner_id", length = 36)
+    private String ownerId;
+
     @Column(name = "name", length = 128, nullable = false)
     private String name;
 
@@ -34,12 +38,23 @@ public class Agent {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "published", nullable = false)
+    private boolean published;
+
+    /** 发布后的公开链接标识。取消发布后保留，重新发布即复用同一个 URL。 */
+    @Column(name = "public_slug", length = 64)
+    private String publicSlug;
+
+    @Column(name = "published_at")
+    private Instant publishedAt;
+
     protected Agent() {
     }
 
-    public Agent(String id, String name, String description, String graphJson, int graphSchemaVersion,
-                 Instant createdAt) {
+    public Agent(String id, String ownerId, String name, String description, String graphJson,
+                 int graphSchemaVersion, Instant createdAt) {
         this.id = id;
+        this.ownerId = ownerId;
         this.name = name;
         this.description = description;
         this.graphJson = graphJson;
@@ -56,8 +71,34 @@ public class Agent {
         this.updatedAt = now;
     }
 
+    public void publish(String slug, Instant now) {
+        this.published = true;
+        this.publicSlug = slug;
+        this.publishedAt = now;
+    }
+
+    public void unpublish() {
+        this.published = false;
+    }
+
     public String getId() {
         return id;
+    }
+
+    public String getOwnerId() {
+        return ownerId;
+    }
+
+    public boolean isPublished() {
+        return published;
+    }
+
+    public String getPublicSlug() {
+        return publicSlug;
+    }
+
+    public Instant getPublishedAt() {
+        return publishedAt;
     }
 
     public String getName() {

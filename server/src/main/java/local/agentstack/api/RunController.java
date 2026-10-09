@@ -1,6 +1,8 @@
 package local.agentstack.api;
 
 import local.agentstack.api.dto.RunDtos;
+import local.agentstack.auth.CurrentUser;
+import local.agentstack.domain.AppUser;
 import local.agentstack.run.RunStreamService;
 import local.agentstack.service.RunService;
 import org.springframework.http.HttpStatus;
@@ -31,36 +33,40 @@ public class RunController {
     }
 
     @PostMapping("/agents/{agentId}/runs")
-    public ResponseEntity<RunDtos.StartResponse> start(@PathVariable String agentId,
+    public ResponseEntity<RunDtos.StartResponse> start(@CurrentUser AppUser user, @PathVariable String agentId,
                                                        @RequestBody(required = false) RunDtos.StartRequest request) {
         RunDtos.StartRequest safe = request == null ? new RunDtos.StartRequest(null, null) : request;
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(runService.start(agentId, safe));
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(runService.startForOwner(user.getId(), agentId, safe));
     }
 
     @GetMapping("/runs/{runId}")
-    public RunDtos.RunView get(@PathVariable String runId) {
-        return runService.get(runId);
+    public RunDtos.RunView get(@CurrentUser AppUser user, @PathVariable String runId) {
+        return runService.get(user.getId(), runId);
     }
 
     /**
      * 事件流。afterSeq 优先取查询参数，其次取 SSE 标准的 Last-Event-ID 请求头
      * （浏览器 EventSource 断线重连会自动带上它），这样"断线续传"是免费的。
+     * 打开流之前先校验 run 归属，否则任何人猜到 runId 就能看别人的输出。
      */
     @GetMapping(value = "/runs/{runId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter events(@PathVariable String runId,
+    public SseEmitter events(@CurrentUser AppUser user, @PathVariable String runId,
                              @RequestParam(name = "afterSeq", required = false) Integer afterSeq,
                              @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId) {
+        runService.requireOwnedRun(user.getId(), runId);
         return streamService.open(runId, resolveAfterSeq(afterSeq, lastEventId));
     }
 
     @GetMapping("/runs/{runId}/messages")
-    public List<RunDtos.MessageView> messagesOfRun(@PathVariable String runId) {
-        return runService.messagesOfRun(runId);
+    public List<RunDtos.MessageView> messagesOfRun(@CurrentUser AppUser user, @PathVariable String runId) {
+        return runService.messagesOfRun(user.getId(), runId);
     }
 
     @GetMapping("/conversations/{conversationId}/messages")
-    public List<RunDtos.MessageView> messagesOfConversation(@PathVariable String conversationId) {
-        return runService.messagesOfConversation(conversationId);
+    public List<RunDtos.MessageView> messagesOfConversation(@CurrentUser AppUser user,
+                                                            @PathVariable String conversationId) {
+        return runService.messagesOfConversation(user.getId(), conversationId);
     }
 
     static int resolveAfterSeq(Integer afterSeq, String lastEventId) {

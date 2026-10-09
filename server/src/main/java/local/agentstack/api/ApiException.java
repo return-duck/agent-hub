@@ -39,6 +39,14 @@ public class ApiException extends RuntimeException {
         return new ApiException("CONFLICT", 409, message);
     }
 
+    public static ApiException unauthorized(String message) {
+        return new ApiException("UNAUTHORIZED", 401, message);
+    }
+
+    public static ApiException forbidden(String message) {
+        return new ApiException("FORBIDDEN", 403, message);
+    }
+
     public static ApiException runtimeUnavailable(String message) {
         return new ApiException("RUNTIME_UNAVAILABLE", 503, message);
     }

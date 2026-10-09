@@ -41,7 +41,7 @@ public class RunStreamService {
      * 判重与不丢事件依赖两点：SSE 事件 id = seq；通道内部"回放 + 注册订阅"在同一把锁里完成。
      */
     public SseEmitter open(String runId, int afterSeq) {
-        Run run = runService.require(runId);
+        Run run = runService.requireRun(runId);
         SseEmitter emitter = new SseEmitter(NO_TIMEOUT);
 
         RunEventChannel existing = broadcaster.get(runId);
