@@ -82,7 +82,7 @@ bash deploy/split/deploy.sh verify    # 端到端验收
 两个 unit 都写了 `StartLimitIntervalSec=300` / `StartLimitBurst=5`：
 内存不足被 OOM Kill 时最多重启 5 次就停手，**不会**像早先那版那样每 5 秒重启一次把整机拖死。
 
-## 踩过的七个坑（已在代码里修掉）
+## 踩过的八个坑（已在代码里修掉）
 
 1. **模板里写死路径**：`APP_DIR` 可配置，但 nginx/systemd 模板写死了 `/home/admin/agent-stack`，
    配置一旦不同就会出现"单元指向不存在的目录"。现在模板用 `__APP_DIR__` 等占位符，
@@ -137,3 +137,31 @@ bash deploy/split/deploy.sh verify    # 端到端验收
   以及 `<公网IP>/a/<slug>`（80 端口会 302 到 /studio/a/）
 - 访客用浏览器本地生成的 visitorId 隔离会话；同一个 agent 的会话列表在
   `GET /api/agents/{id}/conversations` 里可见，并区分访客会话与本机会话
+
+8. **React Flow 的视图性变更污染了 `dirty`**
+   `onNodesChange` 对所有变更都置 `dirty: true`，而 React Flow 在节点挂载/测量时会发
+   `dimensions`、`select` 这类**视图性**变更。后果是：刚选中一个 agent 就显示"保存 *"，
+   并且依赖 `dirty` 判断"是否已保存"的组件（会话列表、调用轨迹）永远停在空状态。
+   现在只对 `position` / `add` / `remove` / `replace` 这类真正改内容的变更置 dirty。
+   （这个 bug 是 CDP 驱动真实浏览器验收时发现的 —— 单测和接口测试都覆盖不到。）
+
+## 中断 / 断点重试 / 调用轨迹（本次迭代）
+
+- **中断**：`POST /api/runs/{id}/cancel`（主人）与公开页对应接口。实现是关掉
+  Java→Node 的 NDJSON 事件流，Node 侧的 `req/res 'close'` 会 abort 掉正在跑的 LangGraph，
+  不需要另立取消协议。中断收敛为 `CANCELLED`，**不发 run.error**（中断不是错误），
+  并保留已产出的部分回答。
+- **编辑并重发**：`POST /api/conversations/{id}/rewind {keepSeq}` 删掉 seq > keepSeq 的
+  消息及其所属 run（`run_event` 与 `trace_span` 级联删除）。
+- **断点重试**：`POST /api/runs/{id}/retry` 先回退这一轮再用同样输入重跑，并在 run 上
+  记录 `retry_of_run_id` 血缘。粒度是**一轮**而非一个节点 —— runtime 刻意保持无状态
+  （历史每次从 MySQL 全量下发），所以"断点"就是上一次完整轮次的边界。
+- **调用轨迹（持久化）**：新表 `trace_span`，kind = `node | model | tool | mcp | skill`，
+  含 span_seq / 起止时间 / 耗时 / 输入 / 输出 / 属性 / 错误。
+  查询入口：`GET /api/runs/{id}/traces`、`/api/conversations/{id}/traces`、
+  `/api/agents/{id}/runs`；公开页也能查自己那一轮。
+  工作室右侧有可折叠的「调用轨迹」面板（运行列表 + span 时间线 + 输入输出展开）。
+
+> **MCP 与技能**：项目里目前没有 MCP / 技能节点的生产者（见 DESIGN 的"未实施"清单），
+> 但轨迹把它们作为一等类别准备好了 —— 协议里有 `kind`、表和界面都按类别展示，
+> 将来接入 `@langchain/mcp-adapters` 或技能包时只需在工具注册表里登记名字。

@@ -232,12 +232,29 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
   },
 
+  /**
+   * 注意：不能对"任何"变更都置 dirty。
+   *
+   * React Flow 在节点挂载/测量时会发 dimensions、select 这类**视图性**变更，
+   * 它们不代表用户改了图。之前一视同仁地置 dirty，后果是：
+   *   - 刚选中一个 agent 就显示"保存 *"（明明没改）
+   *   - 依赖 dirty 判断"是否已保存"的组件（会话列表、调用轨迹）永远停在空状态
+   * 这个 bug 是靠 CDP 驱动真实浏览器验收才发现的。
+   */
   onNodesChange: (changes) => {
-    set({ nodes: applyNodeChanges(changes, get().nodes), dirty: true });
+    const nodes = applyNodeChanges(changes, get().nodes);
+    const contentChanged = changes.some(
+      (c) => c.type === 'position' || c.type === 'add' || c.type === 'remove' || c.type === 'replace',
+    );
+    set(contentChanged ? { nodes, dirty: true } : { nodes });
   },
 
   onEdgesChange: (changes) => {
-    set({ edges: applyEdgeChanges(changes, get().edges), dirty: true });
+    const edges = applyEdgeChanges(changes, get().edges);
+    const contentChanged = changes.some(
+      (c) => c.type === 'add' || c.type === 'remove' || c.type === 'replace',
+    );
+    set(contentChanged ? { edges, dirty: true } : { edges });
   },
 
   onConnect: (connection) => {
