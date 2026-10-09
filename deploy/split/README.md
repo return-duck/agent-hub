@@ -82,7 +82,7 @@ bash deploy/split/deploy.sh verify    # 端到端验收
 两个 unit 都写了 `StartLimitIntervalSec=300` / `StartLimitBurst=5`：
 内存不足被 OOM Kill 时最多重启 5 次就停手，**不会**像早先那版那样每 5 秒重启一次把整机拖死。
 
-## 踩过的四个坑（已在代码里修掉）
+## 踩过的七个坑（已在代码里修掉）
 
 1. **模板里写死路径**：`APP_DIR` 可配置，但 nginx/systemd 模板写死了 `/home/admin/agent-stack`，
    配置一旦不同就会出现"单元指向不存在的目录"。现在模板用 `__APP_DIR__` 等占位符，
@@ -111,3 +111,29 @@ bash deploy/split/deploy.sh verify    # 端到端验收
    ② 仍然把真实访问地址写进 `AGENT_STACK_CORS_ORIGINS` 作为第二道保险
    （`WebConfig` 用的是 `allowedOrigins` 精确匹配且开了 `allowCredentials`，
    所以必须逐个列出，不能用 `*`）。
+
+5. **相对基址 + 深路径 = 白屏**
+   公开对话页的 URL 是 `/a/<slug>` 这种「文件形状」的路径。若 vite 用 `base: './'`，
+   产物里是 `./assets/x.js`，浏览器会解析成 `/a/assets/x.js`（404），JS 根本没加载 → 白屏。
+   改为绝对基址 `base: '/'`；80 端口的 `/studio/` 挂载点由 nginx 额外把 `/assets/`
+   也指向同一份文件（该路径已确认没被简历站占用）。
+
+6. **`try_files` 的回退是一次内部重定向，会重新做 location 匹配**
+   80 端口上写 `try_files $uri $uri/ /index.html` 时，回退目标已经离开本 location，
+   落到 server 块的根（= 简历站目录），于是公开对话页渲染成了**简历站首页**。
+   回退目标必须落在自己可控的 location 里（这里用 `/studio/index.html`）。
+
+7. **80 端口的短链不能用根路径 `/api`**
+   短链 `/a/<slug>` 推导出的 API 基址是 `/api`，而根路径 `/api` 是**简历站后端**的
+   命名空间（它的 `js/p_login.js` 等依赖），不能占用。所以 80 端口的 `/a/<slug>`
+   直接 302 到 `/studio/a/<slug>`，在那个挂载点下推导出的是 `/studio/api`，一切自洽。
+
+## 用户体系与发布（本次迭代）
+
+- 注册/登录/登出/me 在 `/api/auth/**`；口令用 PBKDF2WithHmacSHA256，令牌只存 SHA-256
+- `/api/**` 默认要求登录，只有注册登录、`/api/public/**`、`/api/capabilities` 例外
+- agent 按 owner 隔离，非本人一律 404（不是 403），避免被用来枚举
+- 发布后公开页：`<公网IP>:8080/a/<slug>`、`<公网IP>/studio/a/<slug>`（80 端口），
+  以及 `<公网IP>/a/<slug>`（80 端口会 302 到 /studio/a/）
+- 访客用浏览器本地生成的 visitorId 隔离会话；同一个 agent 的会话列表在
+  `GET /api/agents/{id}/conversations` 里可见，并区分访客会话与本机会话

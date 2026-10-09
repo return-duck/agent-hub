@@ -7,9 +7,13 @@ import react from '@vitejs/plugin-react';
  * 生产环境由静态服务器把 /api 反代到 server 即可，前端代码不需要改。
  */
 export default defineConfig({
-  // 相对基址：产物里的资源引用是 './assets/...'，
-  // 于是同一份 dist 既能挂在 /（8080 根路径）也能挂在 /studio/（80 端子路径）。
-  base: './',
+  // 绝对基址 '/'：资源引用是 '/assets/...'。
+  //
+  // 为什么不能用相对基址 './'：公开对话页的 URL 是 /a/<slug> 这种"文件形状"的深路径，
+  // 浏览器会把 './assets/x.js' 解析成 /a/assets/x.js（404），页面直接白屏。
+  // 绝对基址下，深路径页面仍然从 /assets/ 取资源；80 端口的 /studio/ 挂载点由 nginx
+  // 额外把 /assets/ 也指向同一份文件（该路径已被确认未被简历站占用）。
+  base: '/',
   plugins: [react()],
   server: {
     port: 5173,
