@@ -23,3 +23,6 @@ server/target/
 # 部署：真实配置里含密码与 API key
 deploy/deploy.env
 build/
+
+# TypeScript 增量编译缓存（派生产物，每次编译都会变）
+*.tsbuildinfo
