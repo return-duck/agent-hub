@@ -18,7 +18,7 @@ export interface Node {
   /**
    * 节点类型，必须出现在 node-manifest.json 中
    */
-  type: "start" | "prompt" | "llm" | "end";
+  type: "start" | "prompt" | "llm" | "end" | "http" | "code";
   position: {
     x: number;
     y: number;

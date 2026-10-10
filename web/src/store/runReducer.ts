@@ -41,6 +41,15 @@ export interface RunTotals {
   steps: number;
 }
 
+export interface NodeLogView {
+  nodeId: string | null;
+  nodeType: string;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  input?: unknown;
+  output?: unknown;
+}
+
 export interface RunState {
   status: RunStatus;
   events: ProtocolEvent[];
@@ -48,6 +57,8 @@ export interface RunState {
   /** 正在流式输出但还没定稿的文本 */
   streamingText: string;
   nodeState: Record<string, NodeRunState>;
+  /** 每个节点的过程日志：输入、步骤、输出 */
+  logs: NodeLogView[];
   tools: ToolCallView[];
   totals: RunTotals | null;
   error: { code: string; message: string; retryable?: boolean } | null;
@@ -63,6 +74,7 @@ export const initialRunState: RunState = {
   messages: [],
   streamingText: '',
   nodeState: {},
+  logs: [],
   tools: [],
   totals: null,
   error: null,
@@ -97,6 +109,34 @@ export function reduceRunEvent(state: RunState, event: ProtocolEvent): RunState 
         ...state,
         events,
         nodeState: { ...state.nodeState, [event.nodeId]: status },
+      };
+    }
+
+    case 'node.log': {
+      const level = event.payload.level === 'warn' || event.payload.level === 'error'
+        ? event.payload.level
+        : 'info';
+      const log: NodeLogView = {
+        nodeId: event.nodeId,
+        nodeType: event.payload.nodeType,
+        level,
+        message: event.payload.message,
+        ...(event.payload.input !== undefined ? { input: event.payload.input } : {}),
+        ...(event.payload.output !== undefined ? { output: event.payload.output } : {}),
+      };
+      const answer = event.payload.publishesAnswer ? renderLogOutput(event.payload.output) : '';
+      return {
+        ...state,
+        events,
+        logs: [...state.logs, log],
+        ...(answer
+          ? {
+              messages: [
+                ...state.messages,
+                { id: nextMessageId('a'), role: 'assistant' as const, content: answer, at: Date.now() },
+              ],
+            }
+          : {}),
       };
     }
 
@@ -238,6 +278,16 @@ export function appendUserMessage(state: RunState, content: string): RunState {
 }
 
 /** 契约里的 totals 字段都是可选的（事件可以被裁剪），UI 侧统一补 0 */
+function renderLogOutput(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 function normalizeTotals(
   totals: Partial<RunTotals> | undefined | null,
 ): RunTotals | null {

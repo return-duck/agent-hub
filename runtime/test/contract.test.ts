@@ -36,16 +36,17 @@ describe('事件契约', () => {
     expect(failures).toEqual([]);
   });
 
-  it('schema 声明了 10 个判别式分支，且每个分支的 type 都是 const', () => {
+  it('schema 声明了 11 个判别式分支，且每个分支的 type 都是 const', () => {
     const branches = schema.oneOf as Array<{ $ref: string }>;
-    expect(branches).toHaveLength(10);
+    expect(branches).toHaveLength(11);
 
     const constTypes = branches.map((branch) => {
       const name = branch.$ref.split('/').pop() as string;
       const def = schema.$defs[name] as { properties: { type: { const: string } } };
       return def.properties.type.const;
     });
-    expect(new Set(constTypes).size).toBe(10);
+    expect(new Set(constTypes).size).toBe(11);
+    expect(constTypes).toContain('node.log');
     expect(constTypes).toContain('run.error');
   });
 

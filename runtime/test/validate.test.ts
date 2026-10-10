@@ -226,6 +226,112 @@ describe('入口变量校验', () => {
   });
 });
 
+describe('输入引用必须类型一致且来自上游', () => {
+  it('相同类型的上游输出可以通过', () => {
+    expect(
+      codesOf(
+        makeGraph({
+          nodes: [
+            {
+              id: 'n1',
+              type: 'start',
+              config: { inputVariables: [{ name: 'topic', type: 'string', required: true }] },
+            },
+            {
+              id: 'n2',
+              type: 'prompt',
+              config: { template: { mode: 'ref', ref: 'n1.topic', value: '' } },
+            },
+            { id: 'n4', type: 'end', config: {} },
+          ],
+          edges: [
+            { source: 'n1', target: 'n2' },
+            { source: 'n2', target: 'n4' },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('类型不一致时拒绝', () => {
+    const graph = makeGraph({
+      nodes: [
+        {
+          id: 'n1',
+          type: 'start',
+          config: {
+            inputVariables: [
+              { name: 'topic', type: 'string', required: true },
+              { name: 'count', type: 'number', required: true },
+            ],
+          },
+        },
+        {
+          id: 'n2',
+          type: 'prompt',
+          config: { template: { mode: 'ref', ref: 'n1.count', value: '' } },
+        },
+        { id: 'n4', type: 'end', config: {} },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n4' },
+      ],
+    });
+    expect(codesOf(graph)).toContain('INVALID_NODE_CONFIG');
+    try {
+      planGraph(parseGraph(graph));
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompileError);
+      expect((error as CompileError).problems.map((item) => item.message).join('\n')).toContain('number');
+    }
+  });
+
+  it('不能引用更晚节点的输出', () => {
+    const graph = makeGraph({
+      nodes: [
+        { id: 'n1', type: 'start', config: { inputVariables: [{ name: 'topic', type: 'string', required: true }] } },
+        { id: 'n2', type: 'prompt', config: { template: { mode: 'ref', ref: 'n3.text', value: '' } } },
+        { id: 'n3', type: 'llm', config: { tools: [], maxSteps: 2 } },
+        { id: 'n4', type: 'end', config: {} },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n3' },
+        { source: 'n3', target: 'n4' },
+      ],
+    });
+    try {
+      planGraph(parseGraph(graph));
+      expect.fail('应该拒绝下游引用');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompileError);
+      expect((error as CompileError).problems.map((item) => item.message).join('\n')).toContain('不是上游');
+    }
+  });
+
+  it('必填字符串留空时拒绝，提示去选择或填写', () => {
+    const graph = makeGraph({
+      nodes: [
+        { id: 'n1', type: 'start', config: { inputVariables: [] } },
+        { id: 'n2', type: 'prompt', config: { template: { mode: 'custom', value: '', ref: '' } } },
+        { id: 'n4', type: 'end', config: {} },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n4' },
+      ],
+    });
+    try {
+      planGraph(parseGraph(graph));
+      expect.fail('空的自定义输入应该失败');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompileError);
+      expect((error as CompileError).problems.map((item) => item.message).join('\n')).toContain('不能为空');
+    }
+  });
+});
+
 describe('图解析', () => {
   it('拒绝缺少 id 的节点', () => {
     expect(() =>

@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *  - node.started/finished → 一条 node span（画布节点）
  *  - llm.completed         → 一条 model span，含模型输入与输出
  *  - tool.started/finished → 一条 tool / mcp / skill span，含参数与结果
+ *  - node.log              → 一条 log span，并把它的输入/输出补到仍开着的节点 span 上
  *  - 其余事件不进轨迹：token 流太多，其价值已被 model span 的输入输出覆盖
  *
  * 每条 span 在**结束时**写入（那时才有耗时与结果），但 span_seq 在开始时就分配，
@@ -74,6 +75,7 @@ public class TraceRecorder {
                         safe.path("isError").asBoolean(false) ? "error" : "ok",
                         wrapText("result", text(safe, "result", null)), durationOf(safe),
                         text(safe, "kind", "tool"), ts);
+                case "node.log" -> recordNodeLog(trace, nodeId, safe, ts);
                 default -> {
                     // 其余事件不进轨迹
                 }
@@ -97,7 +99,7 @@ public class TraceRecorder {
         Instant now = Timestamps.now();
         for (OpenSpan span : trace.drainOpen()) {
             try {
-                write(trace, span.kind(), span.name(), span.nodeId(), span.inputJson(), null,
+                write(trace, span.kind(), span.name(), span.nodeId(), span.inputJson(), span.outputJson(),
                         span.attributesJson(), spanStatus,
                         "ok".equals(spanStatus) ? null : "运行在结束前中断",
                         span.startedAt(), now,
@@ -114,12 +116,29 @@ public class TraceRecorder {
         if (span == null) {
             // 没看到 started（事件被截断/丢包）也要留痕，否则轨迹里会莫名缺一段
             span = new OpenSpan(trace.nextSeq(), kindFallback == null ? "tool" : kindFallback,
-                    kindFallback == null ? "unknown" : kindFallback, null, null, null, endedAt);
+                    kindFallback == null ? "unknown" : kindFallback, null, null, null, endedAt, null);
         }
-        write(trace, span.kind(), span.name(), span.nodeId(), span.inputJson(), outputJson,
+        String resolvedOutput = outputJson != null ? outputJson : span.outputJson();
+        write(trace, span.kind(), span.name(), span.nodeId(), span.inputJson(), resolvedOutput,
                 span.attributesJson(), status,
                 "error".equals(status) ? "调用返回错误" : null,
                 span.startedAt(), endedAt, durationMs);
+    }
+
+    /** 节点过程日志：单独落一条，同时把输入/输出补到还没关闭的节点 span 上。 */
+    private void recordNodeLog(RunTrace trace, String nodeId, JsonNode payload, Instant ts) {
+        String message = text(payload, "message", "log");
+        String level = text(payload, "level", "info");
+        ObjectNode attrs = mapper.createObjectNode();
+        attrs.put("level", level);
+        attrs.put("nodeType", text(payload, "nodeType", "node"));
+        String inputJson = jsonNode(payload.get("input"));
+        String outputJson = jsonNode(payload.get("output"));
+        trace.noteIo(nodeKey(nodeId), inputJson, outputJson);
+        write(trace, "log", message, nodeId, inputJson, outputJson, attrs.toString(),
+                "error".equals(level) ? "error" : "ok",
+                "error".equals(level) ? message : null,
+                ts, ts, null);
     }
 
     private void write(RunTrace trace, String kind, String name, String nodeId,
@@ -224,7 +243,22 @@ public class TraceRecorder {
             if (key == null) {
                 return;
             }
-            open.put(key, new OpenSpan(nextSeq(), kind, name, nodeId, inputJson, attributesJson, startedAt));
+            open.put(key, new OpenSpan(nextSeq(), kind, name, nodeId, inputJson, attributesJson, startedAt, null));
+        }
+
+        /** 把节点过程日志里的输入/输出补到仍开着的节点 span。输入只记第一次，输出记最新一次。 */
+        void noteIo(String key, String inputJson, String outputJson) {
+            if (key == null) {
+                return;
+            }
+            OpenSpan span = open.get(key);
+            if (span == null) {
+                return;
+            }
+            open.put(key, new OpenSpan(span.seq(), span.kind(), span.name(), span.nodeId(),
+                    span.inputJson() != null ? span.inputJson() : inputJson,
+                    span.attributesJson(), span.startedAt(),
+                    outputJson != null ? outputJson : span.outputJson()));
         }
 
         OpenSpan take(String key) {
@@ -239,6 +273,6 @@ public class TraceRecorder {
     }
 
     private record OpenSpan(int seq, String kind, String name, String nodeId,
-                            String inputJson, String attributesJson, Instant startedAt) {
+                            String inputJson, String attributesJson, Instant startedAt, String outputJson) {
     }
 }

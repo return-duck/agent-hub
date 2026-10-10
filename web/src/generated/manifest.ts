@@ -5,16 +5,19 @@
  * 重新生成：npm run codegen
  */
 
-export type NodeCategory = "input" | "prompt" | "model" | "output";
-export type NodeTypeName = "start" | "prompt" | "llm" | "end";
+export type NodeCategory = "input" | "prompt" | "model" | "output" | "http" | "code";
+export type NodeTypeName = "start" | "prompt" | "llm" | "end" | "http" | "code";
 export type ToolName = "calculator" | "http_get";
+export type PortType = "string" | "number" | "boolean" | "object";
 export type ConfigWidget =
   | "text"
   | "textarea"
   | "number"
   | "select"
   | "multiselect"
-  | "variableList";
+  | "variableList"
+  | "binding"
+  | "bindingList";
 
 export interface JsonSchemaProperty {
   type?: string;
@@ -43,23 +46,57 @@ export interface VariableDecl {
   description?: string;
 }
 
+export interface InputBinding {
+  mode: "custom" | "ref";
+  value?: unknown;
+  ref?: string;
+}
+
+export interface CodeInputRow extends InputBinding {
+  name: string;
+  type: PortType;
+}
+
 /** 各节点类型的配置形状（与 node-manifest.json 的 configSchema 对应） */
 export interface StartConfig {
   inputVariables?: VariableDecl[];
 }
 export interface PromptConfig {
   role?: "system" | "human";
-  template: string;
+  template: string | InputBinding;
+  outputKey?: string;
 }
 export interface LlmConfig {
-  system?: string;
+  system?: string | InputBinding;
   temperature?: number;
   tools?: ToolName[];
   maxSteps?: number;
   outputKey?: string;
 }
-export interface EndConfig {
+export interface HttpConfig {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  url: string | InputBinding;
+  headers?: string | InputBinding;
+  body?: string | InputBinding;
   outputKey?: string;
+  timeoutMs?: number;
+}
+export interface CodeConfig {
+  source: string | InputBinding;
+  inputs?: string | CodeInputRow[];
+  outputType?: PortType;
+  outputKey?: string;
+  timeoutMs?: number;
+}
+export interface EndConfig {
+  value?: string | InputBinding;
+  outputKey?: string;
+}
+
+export interface OutputPortSpec {
+  name: string;
+  type: PortType;
+  label?: string;
 }
 
 export interface NodeTypeSpec {
@@ -69,8 +106,12 @@ export interface NodeTypeSpec {
   description?: string;
   maxIncoming: number;
   maxOutgoing: number;
+  outputs?: OutputPortSpec[];
   configSchema: NodeConfigSchema;
-  uiSchema?: Record<string, { widget?: ConfigWidget; placeholder?: string }>;
+  uiSchema?: Record<
+    string,
+    { widget?: ConfigWidget; placeholder?: string; valueType?: PortType | "any"; multiline?: boolean; label?: string }
+  >;
 }
 
 export interface NodeManifest {

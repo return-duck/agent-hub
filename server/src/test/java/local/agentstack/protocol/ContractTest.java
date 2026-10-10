@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 契约测试（Java 侧）：读取与 runtime / web 完全相同的 contracts/ 真源，断言不会漂移。
  *
  * 这是"Java 只对信封建模、不解读事件"这一决策的配套保障：
- * 因为我们不在 Java 里为 10 个事件生成类型，所以必须有测试把枚举和 fixture 钉在一起。
+ * 因为我们不在 Java 里为每个事件生成类型，所以必须有测试把枚举和 fixture 钉在一起。
  */
 class ContractTest {
 

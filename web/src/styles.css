@@ -284,6 +284,12 @@ textarea {
 .cat-output {
   background: #f59e0b;
 }
+.cat-http {
+  background: #06b6d4;
+}
+.cat-code {
+  background: #ec4899;
+}
 
 /* ---------------- canvas ---------------- */
 .canvas {
@@ -500,6 +506,37 @@ textarea {
   gap: 8px;
 }
 
+.node-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.node-log {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--bg-soft-2);
+}
+
+.node-log summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.node-log__io {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+
+.node-log-error {
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
 .bubble {
   border-radius: 9px;
   padding: 8px 10px;
@@ -642,10 +679,27 @@ textarea {
   background: rgba(59, 130, 246, 0.28);
 }
 
-.variable-list {
+.variable-list,
+.binding-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.binding-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.binding-row__head {
+  display: grid;
+  grid-template-columns: 1fr 96px auto;
+  gap: 5px;
+  align-items: center;
 }
 
 .variable-row {

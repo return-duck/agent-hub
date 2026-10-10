@@ -12,6 +12,8 @@ public enum NodeType {
     START("start"),
     PROMPT("prompt"),
     LLM("llm"),
+    HTTP("http"),
+    CODE("code"),
     END("end");
 
     private final String wire;

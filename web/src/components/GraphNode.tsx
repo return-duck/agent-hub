@@ -36,12 +36,14 @@ export function GraphNode({ id, data, type, selected }: NodeProps<AgentNode>) {
 
 function summaryOf(data: AgentNode['data']): string {
   const config = data.config ?? {};
-  if (typeof config['template'] === 'string' && config['template']) {
-    return truncate(config['template'] as string);
-  }
-  if (typeof config['system'] === 'string' && config['system']) {
-    return truncate(config['system'] as string);
-  }
+  const url = textOf(config['url']);
+  if (url) return truncate(url);
+  const source = textOf(config['source']);
+  if (source) return truncate(source);
+  const template = textOf(config['template']);
+  if (template) return truncate(template);
+  const system = textOf(config['system']);
+  if (system) return truncate(system);
   if (Array.isArray(config['tools']) && config['tools'].length > 0) {
     return `工具: ${(config['tools'] as string[]).join(', ')}`;
   }
@@ -50,6 +52,16 @@ function summaryOf(data: AgentNode['data']): string {
       .map((v) => v.name)
       .filter(Boolean)
       .join(', ');
+  }
+  return '';
+}
+
+function textOf(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as { mode?: unknown; value?: unknown; ref?: unknown };
+    if (record.mode === 'ref' && typeof record.ref === 'string') return record.ref;
+    if (typeof record.value === 'string') return record.value;
   }
   return '';
 }

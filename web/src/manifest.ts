@@ -25,7 +25,7 @@ export function defaultConfig(type: string): Record<string, unknown> {
   const properties = spec?.configSchema.properties ?? {};
   for (const [key, property] of Object.entries(properties)) {
     if (property.default !== undefined) {
-      config[key] = property.default;
+      config[key] = structuredClone(property.default);
     } else if (property.type === 'array') {
       config[key] = [];
     } else if (property.type === 'string') {

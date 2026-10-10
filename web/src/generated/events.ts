@@ -16,6 +16,7 @@ export type ProtocolEvent =
   | LlmCompleted
   | ToolStarted
   | ToolFinished
+  | NodeLog
   | MessageCompleted
   | RunError
   | RunFinished;
@@ -137,6 +138,30 @@ export interface ToolFinished {
     result?: string;
     isError?: boolean;
     truncated?: boolean;
+  };
+}
+export interface NodeLog {
+  seq?: number;
+  type: "node.log";
+  runId: string;
+  nodeId: string;
+  ts: string;
+  payload: {
+    nodeType: string;
+    level: "info" | "warn" | "error";
+    message: string;
+    /**
+     * 这一步实际使用的输入
+     */
+    input?: {} | unknown[] | string | number | boolean | null;
+    /**
+     * 这一步产出的输出
+     */
+    output?: {} | unknown[] | string | number | boolean | null;
+    /**
+     * 为 true 时，output 就是本次运行的最终答案（结束节点汇总上游输出）
+     */
+    publishesAnswer?: boolean;
   };
 }
 export interface MessageCompleted {

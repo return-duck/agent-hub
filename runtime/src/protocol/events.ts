@@ -70,6 +70,21 @@ export const events = {
     return { type: 'llm.completed', runId, nodeId, ts: now(), payload: { ...info } };
   },
 
+  nodeLog(
+    runId: string,
+    nodeId: string,
+    info: {
+      nodeType: string;
+      level: 'info' | 'warn' | 'error';
+      message: string;
+      input?: unknown;
+      output?: unknown;
+      publishesAnswer?: boolean;
+    },
+  ): OutboundEvent {
+    return { type: 'node.log', runId, nodeId, ts: now(), payload: { ...info } };
+  },
+
   toolStarted(
     runId: string,
     nodeId: string,

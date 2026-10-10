@@ -198,6 +198,39 @@
         }
       }
     },
+    "nodeLog": {
+      "title": "NodeLog",
+      "type": "object",
+      "required": ["type", "runId", "ts", "nodeId", "payload"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "type": { "const": "node.log" },
+        "runId": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "ts": { "type": "string" },
+        "payload": {
+          "type": "object",
+          "required": ["nodeType", "level", "message"],
+          "properties": {
+            "nodeType": { "type": "string" },
+            "level": { "enum": ["info", "warn", "error"] },
+            "message": { "type": "string" },
+            "input": {
+              "description": "这一步实际使用的输入",
+              "type": ["object", "array", "string", "number", "boolean", "null"]
+            },
+            "output": {
+              "description": "这一步产出的输出",
+              "type": ["object", "array", "string", "number", "boolean", "null"]
+            },
+            "publishesAnswer": {
+              "type": "boolean",
+              "description": "为 true 时，output 就是本次运行的最终答案（结束节点汇总上游输出）"
+            }
+          }
+        }
+      }
+    },
     "messageCompleted": {
       "title": "MessageCompleted",
       "type": "object",
@@ -304,6 +337,7 @@
     { "$ref": "#/$defs/llmCompleted" },
     { "$ref": "#/$defs/toolStarted" },
     { "$ref": "#/$defs/toolFinished" },
+    { "$ref": "#/$defs/nodeLog" },
     { "$ref": "#/$defs/messageCompleted" },
     { "$ref": "#/$defs/runError" },
     { "$ref": "#/$defs/runFinished" }

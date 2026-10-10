@@ -162,7 +162,7 @@ function statusBadge(status: RunSummary['status']): string {
 }
 
 function kindLabel(span: TraceSpan): string {
-  return { node: '节点', model: '模型', tool: '工具', mcp: 'MCP', skill: '技能' }[span.kind] ?? span.kind;
+  return { node: '节点', model: '模型', tool: '工具', mcp: 'MCP', skill: '技能', log: '日志' }[span.kind] ?? span.kind;
 }
 
 function kindBadge(span: TraceSpan): string {

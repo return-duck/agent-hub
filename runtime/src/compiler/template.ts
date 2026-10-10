@@ -8,6 +8,8 @@
 export interface TemplateContext {
   input: Record<string, unknown>;
   scratchpad: Record<string, unknown>;
+  /** 本节点声明的输入绑定，解析后的值。模板里写成 {{inputs.name}} */
+  inputs?: Record<string, unknown>;
 }
 
 const REFERENCE = /\{\{\s*([A-Za-z_][\w]*(?:\.[\w]+)*)\s*\}\}/g;
@@ -40,6 +42,8 @@ export function resolvePath(path: string, context: TemplateContext): unknown {
     current = context.input;
   } else if (root === 'scratchpad') {
     current = context.scratchpad;
+  } else if (root === 'inputs') {
+    current = context.inputs ?? {};
   } else {
     return undefined;
   }

@@ -33,6 +33,30 @@ describe('runReducer：状态迁移', () => {
     expect(state.events).toHaveLength(1);
   });
 
+  it('node.log 留下每个节点的输入输出，结束节点的输出成为答案', () => {
+    const state = fold([
+      ev({
+        type: 'node.log',
+        nodeId: 'n2',
+        payload: { nodeType: 'http', level: 'info', message: '收到 HTTP 200', output: { status: 200 } },
+      }),
+      ev({
+        type: 'node.log',
+        nodeId: 'n4',
+        payload: {
+          nodeType: 'end',
+          level: 'info',
+          message: '采用上游输出',
+          output: { status: 200 },
+          publishesAnswer: true,
+        },
+      }),
+    ]);
+    expect(state.logs).toHaveLength(2);
+    expect(state.logs[0]).toMatchObject({ nodeId: 'n2', message: '收到 HTTP 200' });
+    expect(state.messages.at(-1)?.content).toContain('"status": 200');
+  });
+
   it('node.started / node.finished 驱动画布节点状态灯', () => {
     const state = fold([
       ev({ type: 'node.started', nodeId: 'n1', payload: { nodeType: 'start', label: '开始' } }),

@@ -86,8 +86,29 @@ export function RunPanel() {
       <RunSummary />
 
       <div className="chat">
-        {run.messages.length === 0 && run.status === 'idle' && (
+        {run.messages.length === 0 && run.logs.length === 0 && run.status === 'idle' && (
           <p className="panel-empty muted">点「运行」后，这里会显示流式输出、工具调用与节点执行情况。</p>
+        )}
+
+        {run.logs.length > 0 && (
+          <div className="node-logs">
+            <div className="card__title">节点过程</div>
+            {run.logs.map((log, index) => (
+              <details key={`${log.nodeId ?? 'n'}-${index}`} className={`node-log node-log-${log.level}`}>
+                <summary>
+                  <span className="badge">{log.nodeType}</span>
+                  {log.nodeId && <code className="muted">{log.nodeId}</code>}
+                  <span>{log.message}</span>
+                </summary>
+                {log.input !== undefined && (
+                  <pre className="node-log__io">输入{'\n'}{renderLogValue(log.input)}</pre>
+                )}
+                {log.output !== undefined && (
+                  <pre className="node-log__io">输出{'\n'}{renderLogValue(log.output)}</pre>
+                )}
+              </details>
+            ))}
+          </div>
         )}
 
         {run.messages.map((message) => (
@@ -186,6 +207,15 @@ function ToolCard({
       {tool?.result !== undefined && <pre className="tool__result">{tool.result}</pre>}
     </div>
   );
+}
+
+function renderLogValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function coerce(raw: string, type: string): unknown {

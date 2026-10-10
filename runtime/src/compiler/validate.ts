@@ -11,6 +11,7 @@
 import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
 import { nodeManifest } from '../generated/manifest-data.js';
 import { SUPPORTED_SCHEMA_VERSION, toToolNames, type GraphNode, type GraphSpec } from '../domain/graph.js';
+import { checkPortRefs } from './ports.js';
 
 export interface Problem {
   code: string;
@@ -168,6 +169,8 @@ export function planGraph(graph: GraphSpec): CompiledPlan {
       }
     }
   }
+
+  problems.push(...checkPortRefs(order));
 
   if (problems.length > 0) {
     throw new CompileError(problems);

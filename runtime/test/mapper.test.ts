@@ -259,3 +259,34 @@ describe('事件映射器：工具调用', () => {
     expect((events[0]?.payload as { isError: boolean }).isError).toBe(true);
   });
 });
+
+describe('事件映射器：节点过程日志', () => {
+  it('把 on_custom_event(node.log) 收成带输入输出的 node.log', () => {
+    const mapper = makeMapper();
+    const events = mapper.map({
+      event: 'on_custom_event',
+      name: 'node.log',
+      data: {
+        nodeId: 'n2',
+        nodeType: 'http',
+        level: 'info',
+        message: '收到 HTTP 200',
+        input: { url: 'https://example.com' },
+        output: { status: 200 },
+      },
+    });
+    expect(events).toMatchObject([
+      {
+        type: 'node.log',
+        nodeId: 'n2',
+        payload: {
+          nodeType: 'http',
+          level: 'info',
+          message: '收到 HTTP 200',
+          input: { url: 'https://example.com' },
+          output: { status: 200 },
+        },
+      },
+    ]);
+  });
+});

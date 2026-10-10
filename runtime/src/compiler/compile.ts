@@ -24,7 +24,9 @@ import type { AIMessage } from '@langchain/core/messages';
 import { asNumber, type GraphNode } from '../domain/graph.js';
 import type { NodeTypeName } from '../generated/manifest.js';
 import {
+  createCodeRunner,
   createEndRunner,
+  createHttpRunner,
   createModelRunner,
   createPromptRunner,
   createStartRunner,
@@ -35,6 +37,7 @@ import {
   toolsOf,
   type NodeDeps,
 } from './nodes.js';
+import { buildOutputCatalog } from './ports.js';
 import { AgentState, type AgentStateType } from './state.js';
 import type { CompiledPlan } from './validate.js';
 
@@ -64,6 +67,7 @@ function entryName(node: GraphNode): string {
 }
 
 export function compileGraph(plan: CompiledPlan, deps: NodeDeps): CompiledAgent {
+  deps.outputs = buildOutputCatalog(plan.order);
   // LangGraph 的泛型在 TS 里非常重，这里刻意把 builder 收敛成宽松类型，
   // 对外只暴露下面 CompiledAgent 这个干净的接口。
   const builder = new StateGraph(AgentState) as unknown as {
@@ -90,11 +94,19 @@ export function compileGraph(plan: CompiledPlan, deps: NodeDeps): CompiledAgent 
         register(node.id, node);
         break;
       case 'prompt':
-        builder.addNode(node.id, createPromptRunner(node));
+        builder.addNode(node.id, createPromptRunner(node, deps));
         register(node.id, node);
         break;
       case 'end':
-        builder.addNode(node.id, createEndRunner(node));
+        builder.addNode(node.id, createEndRunner(node, deps));
+        register(node.id, node);
+        break;
+      case 'http':
+        builder.addNode(node.id, createHttpRunner(node, deps));
+        register(node.id, node);
+        break;
+      case 'code':
+        builder.addNode(node.id, createCodeRunner(node, deps));
         register(node.id, node);
         break;
       case 'llm':

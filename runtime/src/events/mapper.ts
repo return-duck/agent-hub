@@ -87,6 +87,8 @@ export class EventMapper {
         return this.onToolEnd(raw, false);
       case 'on_tool_error':
         return this.onToolEnd(raw, true);
+      case 'on_custom_event':
+        return this.onCustomEvent(raw);
       default:
         // on_chain_stream / on_custom_event / 根图事件都不需要暴露给前端
         return [];
@@ -176,6 +178,33 @@ export class EventMapper {
         'ok',
       ),
     ];
+  }
+
+  /**
+   * 节点执行器通过 dispatchCustomEvent('node.log') 汇报这一步的输入、输出和过程。
+   * streamEvents 把它收成 on_custom_event，data 就是当时传入的 payload。
+   */
+  private onCustomEvent(raw: RawEvent): OutboundEvent[] {
+    if (raw.name !== 'node.log') return [];
+    const data = raw.data ?? {};
+    const payload = isRecord(data['payload']) ? data['payload'] : data;
+    const nodeType = typeof payload['nodeType'] === 'string' ? payload['nodeType'] : 'node';
+    const level = payload['level'] === 'warn' || payload['level'] === 'error' ? payload['level'] : 'info';
+    const message = typeof payload['message'] === 'string' ? payload['message'] : '';
+    const nodeId =
+      typeof payload['nodeId'] === 'string'
+        ? payload['nodeId']
+        : this.currentNodeId(raw);
+    if (!nodeId || !message) return [];
+    const event = events.nodeLog(this.runId, nodeId, {
+      nodeType,
+      level,
+      message,
+      ...(payload['input'] !== undefined ? { input: payload['input'] } : {}),
+      ...(payload['output'] !== undefined ? { output: payload['output'] } : {}),
+      ...(payload['publishesAnswer'] === true ? { publishesAnswer: true } : {}),
+    });
+    return [event];
   }
 
   private onChatModelStream(raw: RawEvent): OutboundEvent[] {
@@ -284,6 +313,10 @@ export class EventMapper {
       }),
     ];
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function toolCallsOf(raw: RawEvent): number {

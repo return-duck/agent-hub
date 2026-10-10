@@ -5,7 +5,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 协议事件类型。与 contracts/events.schema.json 的 10 个事件一一对应，
+ * 协议事件类型。与 contracts/events.schema.json 的事件一一对应，
  * 由 EventTypeContractTest 用 contracts/fixtures/events.jsonl 断言不遗漏、不多余。
  */
 public enum EventType {
@@ -16,6 +16,7 @@ public enum EventType {
     LLM_COMPLETED("llm.completed"),
     TOOL_STARTED("tool.started"),
     TOOL_FINISHED("tool.finished"),
+    NODE_LOG("node.log"),
     MESSAGE_COMPLETED("message.completed"),
     RUN_ERROR("run.error"),
     RUN_FINISHED("run.finished");

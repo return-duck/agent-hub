@@ -10,6 +10,7 @@ import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messa
 import { GraphRecursionError } from '@langchain/langgraph';
 import type { RuntimeConfig } from '../config.js';
 import { compileGraph } from '../compiler/compile.js';
+import { NodeRunError, stringifyOutput } from '../compiler/nodeLog.js';
 import { CompileError, InputError, planGraph, validateInput } from '../compiler/validate.js';
 import { parseGraph } from '../domain/parse.js';
 import type { GraphSpec } from '../domain/graph.js';
@@ -116,6 +117,9 @@ export async function* executeRun(
         ) {
           answer = event.payload.content;
         }
+        if (event.type === 'node.log' && event.payload.publishesAnswer) {
+          answer = stringifyOutput(event.payload.output);
+        }
         yield event;
       }
     }
@@ -197,6 +201,10 @@ function toMessages(history: Array<{ role?: string; content?: string }>): BaseMe
 }
 
 function classify(error: unknown): { code: ErrorCode; message: string } {
+  const nodeError = findNodeRunError(error);
+  if (nodeError) {
+    return { code: nodeError.code, message: nodeError.message };
+  }
   if (error instanceof GraphRecursionError) {
     return { code: 'STEP_LIMIT', message: `工具循环超过超级步上限：${describe(error)}` };
   }
@@ -212,6 +220,13 @@ function classify(error: unknown): { code: ErrorCode; message: string } {
     return { code: 'TOOL_ERROR', message };
   }
   return { code: 'INTERNAL', message };
+}
+
+function findNodeRunError(error: unknown, depth = 0): NodeRunError | null {
+  if (depth > 6 || error === null || typeof error !== 'object') return null;
+  if (error instanceof NodeRunError) return error;
+  const cause = (error as { cause?: unknown }).cause;
+  return cause === undefined ? null : findNodeRunError(cause, depth + 1);
 }
 
 function describe(error: unknown): string {

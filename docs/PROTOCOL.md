@@ -10,7 +10,7 @@
 ```jsonc
 {
   "seq": 12,                     // 由 server 作为唯一写入者分配，run 内从 1 单调递增
-  "type": "tool.finished",       // 10 种之一（判别式联合的判别字段）
+  "type": "tool.finished",       // 判别式联合的判别字段
   "runId": "f41475da-…",         // server 分配的 run id（不是 runtime 回显的那个）
   "nodeId": "n3",                // 画布节点 id；非节点级事件为 null
   "ts": "2026-10-08T10:37:56.123Z",
@@ -28,13 +28,14 @@
 
 ---
 
-## 2. 事件目录（10 个）
+## 2. 事件目录（11 个）
 
 | `type` | 触发时机 | `payload` 关键字段 |
 |---|---|---|
 | `run.started` | runtime 收到请求后立刻发出 | `model{provider,name,mode}`、`graphSchemaVersion`、`input` |
 | `node.started` | 画布节点开始执行 | `nodeType`、`label` |
 | `node.finished` | 画布节点执行结束 | `nodeType`、`durationMs`、`status: ok\|error` |
+| `node.log` | 节点过程中的一步（输入、执行、输出） | `nodeType`、`level`、`message`、`input`、`output` |
 | `llm.token` | 模型每吐一个分片 | `delta` |
 | `llm.completed` | 一次模型调用结束 | `model`、`inputTokens`、`outputTokens`、`messageCount`、`finishReason`、`durationMs` |
 | `tool.started` | 工具开始执行 | `toolName`、`callId`、`args` |

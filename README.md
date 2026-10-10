@@ -192,7 +192,7 @@ cd runtime && npm run spike      # 重新验证 LangChain v1 API 的真实形态
 ### 3. 契约优先的工程化
 
 - `contracts/*.schema.json` 是唯一真源 → 生成 TS 类型到 `runtime/` 与 `web/`（产物提交进 git，`scripts/test.sh` 做逐字节漂移检查）；
-- **Java 侧刻意不为 10 个事件生成类型**：server 只对"信封"（`seq`/`type`/`nodeId`/`payload:JsonNode`）建模，payload 原样转发 → 契约漂移面从 10 个事件缩到 1 个信封，再用 fixture 契约测试把枚举钉住；
+- **Java 侧刻意不为每个事件生成类型**：server 只对"信封"（`seq`/`type`/`nodeId`/`payload:JsonNode`）建模，payload 原样转发 → 契约漂移面缩到 1 个信封，再用 fixture 契约测试把枚举钉住；
 - 录制真实事件流做三方契约测试，"文档说的"和"代码做的"被同一份数据约束。
 
 ---
@@ -203,7 +203,7 @@ cd runtime && npm run spike      # 重新验证 LangChain v1 API 的真实形态
 agent-stack/
 ├── contracts/                       # 契约真源（唯一）
 │   ├── agent-graph.schema.json      #   画布图 = React Flow 形状（零转换层）
-│   ├── events.schema.json           #   10 个协议事件的判别式联合
+│   ├── events.schema.json           #   协议事件的判别式联合
 │   ├── node-manifest.json           #   节点能力清单（驱动 runtime 执行器 + web 表单）
 │   └── fixtures/events.jsonl        #   真实录制的 54 条事件（三方契约测试共用）
 ├── runtime/                         # agent 运行（独立部署）
@@ -403,4 +403,4 @@ docker compose up --build
 
 - [docs/DESIGN.md](docs/DESIGN.md) —— 架构设计与决策记录（含与设计稿的差异说明）
 - [docs/PLAN.md](docs/PLAN.md) —— 实施计划、工期估算与实际完成情况
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) —— 事件协议参考（10 个事件 + SSE 续传语义）
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) —— 事件协议参考（事件目录 + SSE 续传语义）
