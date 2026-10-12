@@ -64,7 +64,7 @@ e2e 覆盖的真实事件流（54 条）被录制在 [`contracts/fixtures/events
 | [`node/`](node/) | agent 运行（Node 22 + LangChain v1 + LangGraph） | `node/dist`（node 进程） | 8090 |
 | [`contracts/`](contracts/) | 契约真源（3 份 JSON Schema + 录制 fixture） | 仅构建期参与，不部署 | — |
 
-**每个目录自带 `package.json` / `pom.xml`、`.env.example`、`Dockerfile`、`README`，可单独安装、构建、部署**，刻意**不用 pnpm workspace** —— 部署 `frontend/` 不该先装根目录。
+**每个目录自带 `package.json` / `pom.xml`、`.env.example`、`README`，可单独安装、构建、部署**，刻意**不用 pnpm workspace** —— 部署 `frontend/` 不该先装根目录。
 
 安全边界：**API key 只存在于 `node/.env`**（部署时写入 `/opt/agent-stack/shared/runtime.env`，权限 600），
 server 只传模型名，浏览器只与 server 通信（单一 origin、单一 CORS 点）。

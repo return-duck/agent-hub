@@ -10,9 +10,14 @@ dist/
 java/target/
 !java/.mvn/wrapper/maven-wrapper.jar
 
-# 环境变量：可能含 API key
+# 含密码、API key 的本地配置。示例文件 *.env.example 仍然入库。
 .env
-.env.local
+.env.*
+!.env.example
+*.env
+!*.env.example
+deploy/deploy.env
+env.yml
 
 # macOS
 .DS_Store
