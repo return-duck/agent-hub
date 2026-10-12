@@ -16,8 +16,8 @@ const CONTRACTS = path.join(ROOT, 'contracts');
 
 /** 产物落地的位置：每个目录都拿到一份自包含副本 */
 const TARGETS = [
-  path.join(ROOT, 'runtime', 'src', 'generated'),
-  path.join(ROOT, 'web', 'src', 'generated'),
+  path.join(ROOT, 'node', 'src', 'generated'),
+  path.join(ROOT, 'frontend', 'src', 'generated'),
 ];
 
 const banner = (source) =>

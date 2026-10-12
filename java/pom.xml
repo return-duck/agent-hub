@@ -87,11 +87,11 @@
 
   <profiles>
     <!--
-      单端口部署（部署到 ECS 时用）：把 web/dist 打进 jar 的 static/ 里，
+      单端口部署（部署到 ECS 时用）：把 frontend/dist 打进 jar 的 static/ 里，
       于是同一个端口既提供 UI 又提供 API —— 单一 origin、无需 CORS、无需 nginx、
       安全组只需要放行一个端口。
 
-      web/ 依然可以独立构建与独立部署（见 web/nginx.conf），这个 profile 只是
+      frontend/ 依然可以独立构建与独立部署（见 frontend/nginx.conf），这个 profile 只是
       "单机 IP+端口" 这种形态下更省事的选择，不是把三个单元耦合起来。
 
       用法： mvn package -Pwith-web
@@ -104,7 +104,7 @@
             <directory>src/main/resources</directory>
           </resource>
           <resource>
-            <directory>${project.basedir}/../web/dist</directory>
+            <directory>${project.basedir}/../frontend/dist</directory>
             <targetPath>static</targetPath>
           </resource>
         </resources>

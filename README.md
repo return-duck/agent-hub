@@ -13,7 +13,7 @@
 
 ```
 ┌──────────────┐   REST + SSE    ┌────────────────────┐   NDJSON 事件流   ┌─────────────────────┐
-│  web/        │ ──────────────► │  server/           │ ───────────────► │  runtime/           │
+│  frontend/   │ ──────────────► │  java/             │ ───────────────► │  node/              │
 │  React Flow  │ ◄────────────── │  Spring Boot       │ ◄─────────────── │  Node + LangChain   │
 │  画布 + 调试台 │   逐条事件广播    │  控制面 + 持久化     │   逐条事件上报     │  编译器 + LangGraph  │
 └──────────────┘                 └─────────┬──────────┘                   └──────────┬──────────┘
@@ -59,14 +59,14 @@ e2e 覆盖的真实事件流（54 条）被录制在 [`contracts/fixtures/events
 
 | 目录 | 职责 | 构建产物 | 端口 |
 |---|---|---|---|
-| [`web/`](web/) | 画布与调试台（React 19 + React Flow 12 + Vite） | `web/dist` 静态资源 | 5173 (dev) |
-| [`server/`](server/) | 控制面与持久化（Spring Boot 3.5 + JPA + Flyway） | `server/target/*.jar` | 8080 |
-| [`runtime/`](runtime/) | agent 运行（Node 22 + LangChain v1 + LangGraph） | `runtime/dist`（node 进程） | 8090 |
+| [`frontend/`](frontend/) | 画布与调试台（React 19 + React Flow 12 + Vite） | `frontend/dist` 静态资源 | 5173 (dev) |
+| [`java/`](java/) | 控制面与持久化（Spring Boot 3.5 + JPA + Flyway） | `java/target/*.jar` | 8080 |
+| [`node/`](node/) | agent 运行（Node 22 + LangChain v1 + LangGraph） | `node/dist`（node 进程） | 8090 |
 | [`contracts/`](contracts/) | 契约真源（3 份 JSON Schema + 录制 fixture） | 仅构建期参与，不部署 | — |
 
-**每个目录自带 `package.json` / `pom.xml`、`.env.example`、`Dockerfile`、`README`，可单独安装、构建、部署**，刻意**不用 pnpm workspace** —— 部署 `web/` 不该先装根目录。
+**每个目录自带 `package.json` / `pom.xml`、`.env.example`、`Dockerfile`、`README`，可单独安装、构建、部署**，刻意**不用 pnpm workspace** —— 部署 `frontend/` 不该先装根目录。
 
-安全边界：**API key 只存在于 `runtime/.env`**（部署时写入 `/opt/agent-stack/shared/runtime.env`，权限 600），
+安全边界：**API key 只存在于 `node/.env`**（部署时写入 `/opt/agent-stack/shared/runtime.env`，权限 600），
 server 只传模型名，浏览器只与 server 通信（单一 origin、单一 CORS 点）。
 
 ---
@@ -75,7 +75,7 @@ server 只传模型名，浏览器只与 server 通信（单一 origin、单一 
 
 - **中断**：暂停正在跑的一轮（真的会掐断 LLM 侧的工作，不只是前端不显示）
 - **编辑并重发**：暂停后改上一条消息重发，旧的那一轮会被回退掉
-- **断点重试**：回退后用同样的输入重跑（轮级断点，详见 docs/DESIGN.md）
+- **断点重试**：回退后用同样的输入重跑（轮级断点）
 - **调用轨迹**：模型输入输出、工具/MCP/技能调用、节点耗时都持久化在 `trace_span` 表，
   工作室右侧的「调用轨迹」面板可按运行查看
 
@@ -90,8 +90,8 @@ git clone <this-repo> && cd agent-stack
 scripts/toolchain.sh
 
 # 2) 装依赖（三个目录各自独立）
-(cd runtime && npm install)
-(cd web && npm install)
+(cd node && npm install)
+(cd frontend && npm install)
 npm install                       # 仅用于契约代码生成
 
 # 3) 一条命令起全栈（MySQL 3307 + runtime 8090 + server 8080 + web 5173）
@@ -111,15 +111,15 @@ LLM 节点只配 `system` / `temperature` / `tools` / `maxSteps`，换模型只�
 图和代码都不用动。运行时把实际生效的模型通过 `/healthz` 报给前端。
 
 ```bash
-cp runtime/.env.example runtime/.env
-# 编辑 runtime/.env：
+cp node/.env.example node/.env
+# 编辑 node/.env：
 #   MODEL_PROVIDER=deepseek
 #   DEEPSEEK_API_KEY=sk-xxxx        # https://platform.deepseek.com/api_keys
 #   MODEL_NAME=deepseek-chat
 ```
 
 ```bash
-cd runtime && npm run run-graph fixtures/graph-with-tools.json '{"topic":"(12+8)*3"}'
+cd node && npm run run-graph fixtures/graph-with-tools.json '{"topic":"(12+8)*3"}'
 # 会打印 model.mode=live 与真实模型返回的 token 用量
 ```
 
@@ -150,9 +150,9 @@ scripts/db.sh status      # 项目级 MySQL 状态
 scripts/db.sh app-cli -e "select * from run_event limit 5" agent_stack
 scripts/toolchain.sh      # 幂等地补齐/校验项目内工具链
 
-cd runtime && npm run run-graph fixtures/graph-with-tools.json '{"topic":"(12+8)*3"}'
+cd node && npm run run-graph fixtures/graph-with-tools.json '{"topic":"(12+8)*3"}'
                           # 不依赖 Java 与前端，直接看一次 run 的事件流
-cd runtime && npm run spike      # 重新验证 LangChain v1 API 的真实形态
+cd node && npm run spike      # 重新验证 LangChain v1 API 的真实形态
 ```
 
 ---
@@ -161,7 +161,7 @@ cd runtime && npm run spike      # 重新验证 LangChain v1 API 的真实形态
 
 ### 1. 对 LangChain / LangGraph 的**可验证**掌握
 
-仓库里所有 API 用法都先经过 [`runtime/scripts/spike.ts`](runtime/scripts/spike.ts) 对**实际装出来的版本**取证，而不是照记忆写。几个只有读源码/spike 才能发现的坑，都留了注释和回归测试：
+仓库里所有 API 用法都先经过 [`node/scripts/spike.ts`](node/scripts/spike.ts) 对**实际装出来的版本**取证，而不是照记忆写。几个只有读源码/spike 才能发现的坑，都留了注释和回归测试：
 
 | 事实 | 不处理的后果 |
 |---|---|
@@ -191,7 +191,7 @@ cd runtime && npm run spike      # 重新验证 LangChain v1 API 的真实形态
 
 ### 3. 契约优先的工程化
 
-- `contracts/*.schema.json` 是唯一真源 → 生成 TS 类型到 `runtime/` 与 `web/`（产物提交进 git，`scripts/test.sh` 做逐字节漂移检查）；
+- `contracts/*.schema.json` 是唯一真源 → 生成 TS 类型到 `node/` 与 `frontend/`（产物提交进 git，`scripts/test.sh` 做逐字节漂移检查）；
 - **Java 侧刻意不为每个事件生成类型**：server 只对"信封"（`seq`/`type`/`nodeId`/`payload:JsonNode`）建模，payload 原样转发 → 契约漂移面缩到 1 个信封，再用 fixture 契约测试把枚举钉住；
 - 录制真实事件流做三方契约测试，"文档说的"和"代码做的"被同一份数据约束。
 
@@ -206,7 +206,7 @@ agent-stack/
 │   ├── events.schema.json           #   协议事件的判别式联合
 │   ├── node-manifest.json           #   节点能力清单（驱动 runtime 执行器 + web 表单）
 │   └── fixtures/events.jsonl        #   真实录制的 54 条事件（三方契约测试共用）
-├── runtime/                         # agent 运行（独立部署）
+├── node/                            # Node 服务：agent 运行（独立部署）
 │   ├── src/compiler/                #   validate / template / state / compile / nodes
 │   ├── src/events/mapper.ts         #   LangChain 回调 → 协议事件（纯函数）
 │   ├── src/models/                  #   模型工厂（DeepSeek 优先）+ 启动自检 + 确定性脚本化模型
@@ -214,20 +214,19 @@ agent-stack/
 │   ├── src/generated/               #   契约产物（自动生成，勿手改）
 │   ├── scripts/spike.ts             #   LangChain API 取证实录
 │   └── test/                        #   60 个用例
-├── server/                          # 控制面与持久化（独立部署）
+├── java/                            # Java 后端：控制面与持久化（独立部署）
 │   └── src/main/java/local/agentstack/
 │       ├── domain/                  #   5 个实体 + Timestamps（DATETIME(3) 截断）
 │       ├── service/                 #   AgentService / RunService / GraphValidator
 │       ├── run/                     #   RuntimeClient / RunOrchestrator / SSE 广播
 │       └── api/                     #   REST + SSE + 统一错误体
-├── web/                             # 画布与调试台（独立部署）
+├── frontend/                        # 前端：画布与调试台（独立部署）
 │   └── src/
 │       ├── store/runReducer.ts      #   运行状态 = 事件流的 fold（纯函数）
 │       ├── components/              #   画布 / manifest 驱动表单 / 运行面板
 │       └── generated/               #   契约产物（自动生成，勿手改）
 ├── scripts/                         # toolchain / db / dev / stop / test / e2e
-├── docs/                            # DESIGN / PLAN / PROTOCOL
-└── .toolchain/                      # JDK + Maven + MySQL + 日志（gitignore）
+└── .toolchain/                      # JDK + Maven + MySQL + 日志（gitignore，本机才有）
 ```
 
 ---
@@ -236,10 +235,10 @@ agent-stack/
 
 | 层 | 位置 | 覆盖重点 |
 |---|---|---|
-| 单元 | `runtime/test`（Vitest，68） | 图校验 11 条规则、模板渲染、事件映射（**含回归**）、计算器安全性、完整 run 的事件不变量 |
-| 单元 | `web/test`（Vitest，13） | `runReducer` 全部迁移 + **回放真实录制事件流** |
-| 单元 | `server/src/test`（JUnit，10） | SSE 通道订阅/回放/判重、`Last-Event-ID` 解析、事件契约 |
-| 集成 | `server/src/test`（JUnit，14） | **真实 MySQL** 上的 Flyway / 存取往返 / 编排 / 终态收敛（用桩 runtime 精确构造失败场景） |
+| 单元 | `node/test`（Vitest，68） | 图校验 11 条规则、模板渲染、事件映射（**含回归**）、计算器安全性、完整 run 的事件不变量 |
+| 单元 | `frontend/test`（Vitest，13） | `runReducer` 全部迁移 + **回放真实录制事件流** |
+| 单元 | `java/src/test`（JUnit，10） | SSE 通道订阅/回放/判重、`Last-Event-ID` 解析、事件契约 |
+| 集成 | `java/src/test`（JUnit，14） | **真实 MySQL** 上的 Flyway / 存取往返 / 编排 / 终态收敛（用桩 runtime 精确构造失败场景） |
 | 验收 | `scripts/e2e.py`（38 断言） | 新建→保存→修改→运行→事件→落库→续传→失败路径 |
 
 刻意**没有**用 Testcontainers：本机没有 Docker，项目自带真实 MySQL 实例反而更贴近部署形态，也让"用 MySQL 存储"这条要求在验收时可被字面验证。
@@ -255,152 +254,3 @@ agent-stack/
 | agent 版本管理与回滚 | 表结构和图 schema 版本号（`schemaVersion`）已就位，迁移器属下一阶段 |
 | 动态 OpenAPI/MCP 工具、DB 凭证加密、RBAC、向量检索 | 与"保存并运行一个 agent"这条主链路正交 |
 | 多租户、协作编辑、插件市场 | 同上 |
-
----
-
-## 部署到阿里云 ECS（单机，IP + 高位端口）
-
-`deploy/` 下是一套完整的部署脚本。设计前提：**产物在本机构建，服务器上不需要 JDK / Maven / npm** ——
-三个产物都与架构无关（jar 是字节码、dist 是 JS、web/dist 是静态文件），
-这顺带绕开了服务器拉 Maven Central / npm 慢的问题。
-
-```bash
-# 1. 填配置（已被 .gitignore 忽略，不会进版本库）
-cp deploy/deploy.env.example deploy/deploy.env
-vi deploy/deploy.env          # 公网 IP / SSH 用户 / 端口 / MySQL 管理员密码 / 库名
-
-# 2. 一条命令：本机构建 → 打包上传 → 服务器安装并重启
-bash deploy/deploy.sh
-```
-
-部署脚本会做这些事（**可重复执行，幂等**）：
-
-| 阶段 | 行为 |
-|---|---|
-| 本地构建 | `vite build` → `tsc` → `mvn clean package -Pwith-web`（前端打进 jar） |
-| 组装上传 | 生成 `release/`（jar + runtime dist + 依赖清单 + systemd 模板），tar over ssh 传到服务器 |
-| 装运行时 | 若无 JRE/Node，按 CPU 架构下载官方包到 `$APP_DIR/.toolchain`（**不依赖包管理器**，Node 走 npmmirror 镜像，失败自动回退官方源） |
-| 装依赖 | 服务器上 `npm ci --omit=dev`（只装运行时依赖，比上传 node_modules 干净） |
-| 原子发布 | 建 `releases/<时间戳>/`，`current` 软链指过去；只保留最近 5 个版本 |
-| 建库建号 | `CREATE DATABASE IF NOT EXISTS` + 专用账号，**只授权这一个 schema**；表结构由 server 启动时 Flyway 自动建 |
-| 托管服务 | 写 systemd 单元（以非 root 的 `agentstack` 系统用户运行），`enable --now` |
-| 健康检查 | 轮询 `/healthz` 与 `/actuator/health`，失败自动打印最后 30 行日志 |
-
-**单端口**：默认把 `web/dist` 打进 jar，所以一个端口同时提供 UI 与 API ——
-单一 origin、无需 CORS、无需 nginx、安全组只需放行一个端口。
-想让前端独立部署（CDN/nginx）就把 `SERVE_WEB=false`，并用 [web/nginx.conf](web/nginx.conf) 托管。
-
-### 部署方式：三包分离（推荐）
-
-前端、Java、Node **各自独立打包、独立上传、独立启动**，前端由 nginx 托管并反代 `/api`：
-
-```bash
-bash deploy/split/deploy.sh init      # 一次性
-bash deploy/split/deploy.sh web       # 只更新前端
-bash deploy/split/deploy.sh server    # 只更新 Java
-bash deploy/split/deploy.sh runtime   # 只更新 Node
-bash deploy/split/deploy.sh verify    # 端到端验收
-```
-
-拓扑：`浏览器 :8080 → nginx →┬ / → web/（静态）  └ /api/ → 127.0.0.1:18080（Java）→ 127.0.0.1:8090（Node）`
-
-详见 [`deploy/split/README.md`](deploy/split/README.md)。
-
-> 旧的单端口方式（前端打进 jar、由 jar 自己监听端口）仍保留在 `deploy/deploy.sh`，
-> 适合不想引入 nginx 的场景；日常更新前端用三包分离更省事（600KB vs 51MB）。
-
-### ⚠️ 内存是这套部署的硬约束（真实踩坑记录）
-
-一次真实部署事故：**1674MB 的 ECS** 上，MySQL + 既有 Java 应用 + 本项目 Node runtime + 本项目
-Spring Boot（当时堆 512MB）把内存挤爆，Spring Boot 起不来；而原来的 unit 只写了
-`Restart=on-failure` 没有频率限制，systemd 每 5 秒重启一次、每次重新申请堆内存，
-最终把整机拖到**连 sshd 都发不出 SSH banner**（TCP 能连、80/8080 也无任何响应，
-ping 通但 RTT 抖动极大）。外部无法自救，只能从控制台重启。
-
-由此固化下来的规则：
-
-| 规则 | 原因 |
-|---|---|
-| 堆按内存 **1/4** 算（夹 256MB..1536MB），而不是 `MaxRAMPercentage` | 后者只看总内存，不知道同机还有 MySQL 与其它应用 |
-| 两个 unit 必须写 `StartLimitIntervalSec` / `StartLimitBurst` | 否则 OOM Kill → 重启 → 再 OOM，无限抖动，机器无法自愈 |
-| 健康检查失败时先 `systemctl stop` 再退出 | 不给抖动留机会 |
-| **单机建议 ≥2GB，且不要把 MySQL 与本项目挤在一起** | 1.6GB 上四五个 Java/Node 进程必然互相踩 |
-
-同机内存紧张时的两条出路：把 MySQL 换成阿里云 RDS（改 `deploy.env` 里的 `DB_HOST`），或升配实例。
-
-真出现卡死时，按这个顺序处理：
-
-1. **阿里云控制台 → 实例 → 重启**（内核活着但用户态饿死时，这是唯一出路）
-2. 在你本机执行 `bash deploy/rescue.sh` —— 它自带 30 分钟重试，会自动等到机器活过来，
-   然后单连接上传脚本、在服务器上 `setsid` 脱离执行、并把日志打回来
-3. 若重启后又立刻卡死（我的服务会在开机时自启），用控制台的
-   **远程连接(VNC)** 或 **云助手 → 发送命令**，粘贴执行
-   [`deploy/emergency-disable.sh`](deploy/emergency-disable.sh)（31 行，只停服务禁自启、不删文件），
-   给机器松绑后再执行第 2 步
-
-`deploy/rescue.sh` 在服务器上做的事：停服务释放内存 → 抓取改动前的根因日志 →
-停掉占用 8080 的既有应用（只停服务、不删文件）→ 以保守配置（**堆 256MB、端口 8080、
-限制重启次数**）重新装好并启动 → 本机健康检查。端口用 8080 是因为它已被安全组放行，
-而 8081 在应用未启动时无法验证是否放行。
-
-### 部署前必须知道的三件事
-
-1. **安全组是独立的一层**。阿里云控制台 → 实例 → 安全组 → 入方向，放行 `TCP <APP_PORT>`（默认 8081）。
-   只改服务器系统防火墙（firewalld/iptables）**不会**生效；脚本会在检测到 firewalld 时给出确切的放行命令。
-2. **大陆地域的 80/443 需要 ICP 备案**，未备案会被运营商拦截。所以默认用 8081 这类高位端口，直接 `http://公网IP:8081` 访问。
-3. **建议至少 2GB 内存**。脚本按内存的 **1/4** 计算 JVM 堆（夹在 256MB–1536MB，并在部署输出里打印实际值）——
-   刻意**不用** `MaxRAMPercentage`：它只看机器总内存，不知道同机还跑着 MySQL 和 Node，
-   1.6GB 的规格上会算出 ~1GB 堆，然后被 OOM Killer 干掉；改成 1/4 后同规格只占 384MB。堆之外还带 `ExitOnOutOfMemoryError`，
-   内存不足时干脆退出让 systemd 重启，而不是僵死。内存实在紧张就把 MySQL 换成阿里云 RDS（改 `DB_HOST` 即可）。
-
-### 服务器上常用命令
-
-```bash
-systemctl status agent-stack-server agent-stack-runtime
-journalctl -u agent-stack-server -f          # 应用日志
-journalctl -u agent-stack-runtime -f         # runtime 日志
-ls -l /opt/agent-stack/current               # 当前生效的版本
-ls -1 /opt/agent-stack/releases              # 历史版本（回滚：把 current 软链指回去再 restart）
-```
-
-### 已验证 / 未验证的边界（重要）
-
-| 项 | 状态 |
-|---|---|
-| 三个产物能独立启动（`java -jar`、`node dist/main.js`、静态资源） | ✅ 本机实测 |
-| 单端口 jar 同时提供 UI（`/`、`/assets/*`）与 API（`/api/*`） | ✅ 本机实测 |
-| 软链部署布局（`current` → `releases/<stamp>`）下 runtime 能正常启动 | ✅ 本机实测（这个布局查出过一个真 bug，见下） |
-| 本地构建 + 组装 `release/` 完整跑通 | ✅ 实测（57MB，jar 内含前端） |
-| systemd 模板渲染无残留占位符 | ✅ 实测 |
-| **`deploy.sh` 对真实 ECS 的端到端执行** | ⚠️ **未验证**（我没有你的服务器）。脚本写得很保守（每步都有明确报错 + 健康检查 + 日志回显），但首次执行请留意输出 |
-| **Docker 镜像构建** | ⚠️ 未验证（开发环境没有 Docker），见文末的 Docker 段落 |
-
-### 一个被部署布局查出来的真 bug
-
-runtime 原先在 `server.ts` 底部用 `import.meta.url === file://${process.argv[1]}` 判断"是否被直接执行"。
-但部署是通过 `current/` 软链启动的，**Node 会把主模块解析成 realpath**，于是两者永不相等 ——
-表现为**进程活着但完全不监听**，而且没有任何报错，在服务器上极难排查。
-
-本机用真实软链布局复现后，改成独立的 `src/main.ts` 入口无条件启动，不再依赖任何启发式判断
-（`runtime/src/main.ts` 里有注释说明，systemd 单元注释里也标了）。
-
-### 备选：Docker Compose
-
-根目录有 `docker-compose.yml`，把 MySQL + runtime + server + web 串起来：
-
-```bash
-docker compose up --build
-```
-
-> ⚠️ 三个 `Dockerfile` 与 compose 文件**未经实际构建验证**（开发环境没有 Docker），只经人工审查。
-> 国内拉 Docker Hub 镜像通常需要先配阿里云容器镜像加速器。
-> 非容器形态的启动方式（`scripts/dev.sh`、`deploy/deploy.sh`）是已经实际验证过的路径。
-
-
----
-
-## 文档
-
-- [docs/DESIGN.md](docs/DESIGN.md) —— 架构设计与决策记录（含与设计稿的差异说明）
-- [docs/PLAN.md](docs/PLAN.md) —— 实施计划、工期估算与实际完成情况
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) —— 事件协议参考（事件目录 + SSE 续传语义）

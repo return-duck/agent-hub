@@ -8,7 +8,7 @@
  * 现在录制过程本身可复现。
  *
  * 用法：
- *   cd runtime && npm run build && node ../scripts/record-events.mjs
+ *   cd node && npm run build && node ../scripts/record-events.mjs
  *
  * 刻意用脚本化模型（MODEL_PROVIDER=scripted）：录制要可复现、不依赖网络与 API key。
  */
@@ -18,8 +18,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const RUNTIME_DIST = path.join(ROOT, 'runtime', 'dist', 'server.js');
-const GRAPH = path.join(ROOT, 'runtime', 'fixtures', 'graph-with-tools.json');
+const RUNTIME_DIST = path.join(ROOT, 'node', 'dist', 'server.js');
+const GRAPH = path.join(ROOT, 'node', 'fixtures', 'graph-with-tools.json');
 const OUT = path.join(ROOT, 'contracts', 'fixtures', 'events.jsonl');
 
 // 必须在 import 之前设置：config 在模块加载时读取环境变量

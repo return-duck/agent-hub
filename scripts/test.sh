@@ -16,18 +16,18 @@ info "检查契约产物是否与 contracts/ 一致 ..."
 # 这样在"还没有任何 commit"的仓库里也能正确判断漂移（git diff 对未跟踪文件是瞎的）。
 SNAPSHOT="$(mktemp -d)"
 trap 'rm -rf "$SNAPSHOT"' EXIT
-cp -R "$ROOT/runtime/src/generated" "$SNAPSHOT/runtime-generated"
-cp -R "$ROOT/web/src/generated" "$SNAPSHOT/web-generated"
+cp -R "$ROOT/node/src/generated" "$SNAPSHOT/runtime-generated"
+cp -R "$ROOT/frontend/src/generated" "$SNAPSHOT/web-generated"
 
 node "$ROOT/scripts/codegen.mjs" >/dev/null
 
 DRIFT=0
-diff -r "$SNAPSHOT/runtime-generated" "$ROOT/runtime/src/generated" >/dev/null || DRIFT=1
-diff -r "$SNAPSHOT/web-generated" "$ROOT/web/src/generated" >/dev/null || DRIFT=1
+diff -r "$SNAPSHOT/runtime-generated" "$ROOT/node/src/generated" >/dev/null || DRIFT=1
+diff -r "$SNAPSHOT/web-generated" "$ROOT/frontend/src/generated" >/dev/null || DRIFT=1
 if [ "$DRIFT" -ne 0 ]; then
   fail "生成的契约类型与 contracts/ 不一致（产物已被刷新，请一并提交）"
-  diff -r "$SNAPSHOT/runtime-generated" "$ROOT/runtime/src/generated" || true
-  diff -r "$SNAPSHOT/web-generated" "$ROOT/web/src/generated" || true
+  diff -r "$SNAPSHOT/runtime-generated" "$ROOT/node/src/generated" || true
+  diff -r "$SNAPSHOT/web-generated" "$ROOT/frontend/src/generated" || true
   exit 1
 fi
 ok "契约产物无漂移"
@@ -38,12 +38,12 @@ bash "$ROOT/scripts/db.sh" start
 
 # ------------------------------------------------------------------ 三层测试
 info "runtime 测试 ..."
-(cd "$ROOT/runtime" && npm test --silent)
+(cd "$ROOT/node" && npm test --silent)
 
 info "web 测试 ..."
-(cd "$ROOT/web" && npm test --silent)
+(cd "$ROOT/frontend" && npm test --silent)
 
 info "server 测试 ..."
-(cd "$ROOT/server" && "$ROOT/scripts/mvn.sh" -B -q test)
+(cd "$ROOT/java" && "$ROOT/scripts/mvn.sh" -B -q test)
 
 ok "三层测试全部通过"
