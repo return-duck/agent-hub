@@ -224,5 +224,12 @@ function coerce(raw: string, type: string): unknown {
     return Number.isFinite(parsed) ? parsed : raw;
   }
   if (type === 'boolean') return raw === 'true' || raw === '1';
+  if (type === 'object') {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return raw;
+    }
+  }
   return raw;
 }

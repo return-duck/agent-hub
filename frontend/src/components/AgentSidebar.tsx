@@ -47,7 +47,7 @@ export function AgentSidebar() {
       <div className="sidebar__section">
         <div className="sidebar__title">节点（点击添加）</div>
         <div className="palette">
-          {manifest.nodeTypes.map((spec) => (
+          {manifest.nodeTypes.filter((spec) => !('palette' in spec) || spec.palette !== false).map((spec) => (
             <button
               key={spec.type}
               className="palette__item"

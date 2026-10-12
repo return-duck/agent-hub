@@ -200,3 +200,41 @@ describe('HTTP 节点输出接到代码节点输入', () => {
     expect(outcome.answer).toContain('"status":200');
   });
 });
+
+describe('代码出参字段接到结束节点', () => {
+  it('按出参名取值，单行 string 的结束节点直接交出这段文本', async () => {
+    const graph = makeGraph({
+      nodes: [
+        {
+          id: 'n1',
+          type: 'start',
+          config: { inputVariables: [{ name: 'user_input', type: 'string', required: true }] },
+        },
+        {
+          id: 'n2',
+          type: 'code',
+          config: {
+            source: 'return { bodyText: inputs.topic, count: inputs.topic.length };',
+            inputs: [{ name: 'topic', type: 'string', mode: 'ref', ref: 'n1.user_input' }],
+            outputs: [
+              { name: 'bodyText', type: 'string' },
+              { name: 'count', type: 'number' },
+            ],
+          },
+        },
+        {
+          id: 'n3',
+          type: 'end',
+          config: { params: [{ name: 'result', type: 'string', mode: 'ref', ref: 'n2.bodyText' }] },
+        },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n3' },
+      ],
+    });
+    const { outcome } = await collect(graph, { user_input: '海边' });
+    expect(outcome.status).toBe('SUCCEEDED');
+    expect(outcome.answer).toBe('海边');
+  });
+});

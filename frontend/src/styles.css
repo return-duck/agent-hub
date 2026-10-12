@@ -709,6 +709,44 @@ textarea {
   align-items: center;
 }
 
+.param-table__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.param-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.param-table__head,
+.param-table__row {
+  display: grid;
+  gap: 4px;
+  align-items: center;
+  min-width: 420px;
+}
+
+.param-table__head {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.param-value {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.param-actions {
+  display: flex;
+  gap: 2px;
+}
+
 .panel-empty {
   color: var(--text-dim);
   font-size: 12.5px;

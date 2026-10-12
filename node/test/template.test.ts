@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { referencedPaths, renderTemplate } from '../src/compiler/template.js';
+import { braceNames, referencedPaths, renderBraceTemplate, renderTemplate } from '../src/compiler/template.js';
 
 describe('模板渲染', () => {
   const context = {
@@ -27,6 +27,17 @@ describe('模板渲染', () => {
     const result = renderTemplate('{{env.SECRET}}', context);
     expect(result.text).toBe('');
     expect(result.warnings).toHaveLength(1);
+  });
+
+  it('大模型提示词用单层花括号替换入参，双花括号仍留给旧模板', () => {
+    expect(renderBraceTemplate('给定一个主题: {topic}, 写一个故事', { topic: '海边' }).text).toBe(
+      '给定一个主题: 海边, 写一个故事',
+    );
+    expect(renderBraceTemplate('保留 {{input.topic}}', { topic: '海边' }).text).toBe('保留 {{input.topic}}');
+    expect(renderBraceTemplate('缺失 {topic}', {}).error).toContain('{topic}');
+    expect(renderBraceTemplate('空 {topic}', { topic: '' }).error).toContain('为空');
+    expect(renderBraceTemplate('对象 {topic}', { topic: { a: 1 } }).error).toContain('不能写成文本');
+    expect(braceNames('你好 {topic}，再看 {topic}')).toEqual(['topic', 'topic']);
   });
 
   it('referencedPaths 供 UI 做变量可达性提示', () => {

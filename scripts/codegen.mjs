@@ -50,7 +50,13 @@ export type ConfigWidget =
   | "multiselect"
   | "variableList"
   | "binding"
-  | "bindingList";
+  | "bindingList"
+  | "paramTable"
+  | "model"
+  | "hidden";
+
+export type ParamColumn = "name" | "type" | "description" | "required" | "value";
+export type ParamValueMode = "none" | "ref" | "custom";
 
 export interface JsonSchemaProperty {
   type?: string;
@@ -74,7 +80,7 @@ export interface NodeConfigSchema {
 
 export interface VariableDecl {
   name: string;
-  type: "string" | "number" | "boolean";
+  type: PortType;
   required?: boolean;
   description?: string;
 }
@@ -88,6 +94,20 @@ export interface InputBinding {
 export interface CodeInputRow extends InputBinding {
   name: string;
   type: PortType;
+  description?: string;
+}
+
+export interface OutputDecl {
+  name: string;
+  type: PortType;
+  description?: string;
+}
+
+export interface LlmInputRow {
+  name: string;
+  mode?: "custom" | "ref";
+  ref?: string;
+  value?: unknown;
 }
 
 /** 各节点类型的配置形状（与 node-manifest.json 的 configSchema 对应） */
@@ -100,6 +120,9 @@ export interface PromptConfig {
   outputKey?: string;
 }
 export interface LlmConfig {
+  model?: string;
+  inputs?: LlmInputRow[];
+  prompt?: string;
   system?: string | InputBinding;
   temperature?: number;
   tools?: ToolName[];
@@ -117,12 +140,14 @@ export interface HttpConfig {
 export interface CodeConfig {
   source: string | InputBinding;
   inputs?: string | CodeInputRow[];
+  outputs?: OutputDecl[];
   outputType?: PortType;
   outputKey?: string;
   timeoutMs?: number;
 }
 export interface EndConfig {
   value?: string | InputBinding;
+  params?: CodeInputRow[];
   outputKey?: string;
 }
 
@@ -137,13 +162,23 @@ export interface NodeTypeSpec {
   displayName: string;
   category: NodeCategory;
   description?: string;
+  palette?: boolean;
   maxIncoming: number;
   maxOutgoing: number;
   outputs?: OutputPortSpec[];
   configSchema: NodeConfigSchema;
   uiSchema?: Record<
     string,
-    { widget?: ConfigWidget; placeholder?: string; valueType?: PortType | "any"; multiline?: boolean; label?: string }
+    {
+      widget?: ConfigWidget;
+      placeholder?: string;
+      valueType?: PortType | "any";
+      multiline?: boolean;
+      label?: string;
+      columns?: ParamColumn[];
+      valueMode?: ParamValueMode;
+      template?: "brace";
+    }
   >;
 }
 

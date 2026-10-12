@@ -15,23 +15,65 @@ export interface OutputChoice {
   label: string;
 }
 
+export interface OutputGroup {
+  nodeId: string;
+  title: string;
+  choices: OutputChoice[];
+}
+
+export interface PortEdge {
+  source: string;
+  target: string;
+}
+
 const PORT_TYPES = new Set<string>(['string', 'number', 'boolean', 'object']);
 
 export function outputChoices(nodes: PortNode[], currentId: string, accept: BindingType): OutputChoice[] {
-  const choices: OutputChoice[] = [];
+  return outputGroups(nodes, [], currentId, accept, false).flatMap((group) =>
+    group.choices.map((choice) => ({ ...choice, label: `${group.title} · ${choice.label}` })),
+  );
+}
+
+/** 参数值下拉：只展开当前节点上游，按节点分组，选项文字是字段名。 */
+export function outputGroups(
+  nodes: PortNode[],
+  edges: PortEdge[],
+  currentId: string,
+  accept: BindingType,
+  upstreamOnly = true,
+): OutputGroup[] {
+  const allowed = upstreamOnly ? upstreamIds(edges, currentId) : null;
+  const groups: OutputGroup[] = [];
   for (const node of nodes) {
     if (node.id === currentId) continue;
+    if (allowed && !allowed.has(node.id)) continue;
     const title = node.data.label || node.id;
+    const choices: OutputChoice[] = [];
     for (const port of outputsOf(node)) {
       if (accept !== 'any' && port.type !== accept) continue;
-      choices.push({
-        ref: port.ref,
-        type: port.type,
-        label: `${title} · ${port.label}（${port.type}）`,
-      });
+      choices.push({ ref: port.ref, type: port.type, label: port.label });
     }
+    if (choices.length > 0) groups.push({ nodeId: node.id, title, choices });
   }
-  return choices;
+  return groups;
+}
+
+function upstreamIds(edges: PortEdge[], currentId: string): Set<string> {
+  const incoming = new Map<string, string[]>();
+  for (const edge of edges) {
+    const list = incoming.get(edge.target) ?? [];
+    list.push(edge.source);
+    incoming.set(edge.target, list);
+  }
+  const seen = new Set<string>();
+  const stack = [...(incoming.get(currentId) ?? [])];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    stack.push(...(incoming.get(id) ?? []));
+  }
+  return seen;
 }
 
 function outputsOf(node: PortNode): Array<{ ref: string; label: string; type: PortType }> {
@@ -47,6 +89,19 @@ function outputsOf(node: PortNode): Array<{ ref: string; label: string; type: Po
       ports.push({ ref: `${node.id}.${name}`, label: name, type });
     }
     return ports;
+  }
+
+  if (node.type === 'code') {
+    const declared = Array.isArray(config['outputs']) ? config['outputs'] : [];
+    const ports: Array<{ ref: string; label: string; type: PortType }> = [];
+    for (const raw of declared) {
+      if (!raw || typeof raw !== 'object') continue;
+      const name = (raw as { name?: unknown }).name;
+      const type = (raw as { type?: unknown }).type;
+      if (typeof name !== 'string' || !name || !isPortType(type)) continue;
+      ports.push({ ref: `${node.id}.${name}`, label: name, type });
+    }
+    if (ports.length > 0) return ports;
   }
 
   const spec = nodeSpec(node.type ?? '');

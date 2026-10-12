@@ -28,21 +28,23 @@ export type AgentNode = Node<AgentNodeData, string>;
 const STARTER_GRAPH: AgentGraph = {
   schemaVersion: 1,
   nodes: [
-    node('n1', 'start', 40, 140, { inputVariables: [{ name: 'topic', type: 'string', required: true }] }),
-    node('n2', 'prompt', 300, 140, { role: 'human', template: '请帮我算一下：{{input.topic}}' }),
-    node('n3', 'llm', 560, 140, {
-      system: '你是一个严谨的助手。需要做算术时，调用 calculator 工具，不要自己心算。',
-      temperature: 0.2,
-      tools: ['calculator'],
-      maxSteps: 6,
+    node('n1', 'start', 40, 160, {
+      inputVariables: [{ name: 'user_input', type: 'string', required: true, description: '用户输入' }],
+    }),
+    node('n2', 'llm', 340, 160, {
+      model: '',
+      inputs: [{ name: 'topic', mode: 'ref', ref: 'n1.user_input' }],
+      prompt: '给定一个主题: {topic}, 写一个100字的小故事',
       outputKey: 'answer',
     }),
-    node('n4', 'end', 820, 140, { outputKey: 'answer' }),
+    node('n3', 'end', 680, 160, {
+      params: [{ name: 'result', description: '', type: 'string', mode: 'ref', ref: 'n2.output' }],
+      outputKey: 'answer',
+    }),
   ],
   edges: [
     { id: 'e1', source: 'n1', target: 'n2' },
     { id: 'e2', source: 'n2', target: 'n3' },
-    { id: 'e3', source: 'n3', target: 'n4' },
   ],
 };
 

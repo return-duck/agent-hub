@@ -88,7 +88,11 @@ export async function* executeRun(
     config,
     model: bundle.model,
     tools: new Map(toolNames.map((name, index) => [name, tools[index] as never])),
-    appendInputMessage: !plan.order.some((node) => node.type === 'prompt'),
+    appendInputMessage: !plan.order.some(
+      (node) =>
+        node.type === 'prompt' ||
+        (node.type === 'llm' && typeof node.config.prompt === 'string' && node.config.prompt.trim().length > 0),
+    ),
   });
 
   const mapper = new EventMapper({

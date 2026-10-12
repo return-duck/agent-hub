@@ -6,7 +6,7 @@
  */
 import { nodeManifest } from '../generated/manifest-data.js';
 import type { GraphNode } from '../domain/graph.js';
-import { resolvePath, renderTemplate, type TemplateContext } from './template.js';
+import { braceNames, resolvePath, renderTemplate, type TemplateContext } from './template.js';
 import { NodeRunError } from './nodeLog.js';
 import { outputKeyOf, resolveBindings } from './bindings.js';
 
@@ -46,7 +46,7 @@ interface ManifestOutput {
 interface ManifestNode {
   type: string;
   outputs?: readonly ManifestOutput[];
-  uiSchema?: Record<string, { widget?: string; valueType?: string }>;
+  uiSchema?: Record<string, { widget?: string; valueType?: string; valueMode?: string; template?: string }>;
   configSchema?: { required?: readonly string[] };
 }
 
@@ -101,13 +101,28 @@ export function outputsOf(node: GraphNode): OutputPort[] {
     return ports;
   }
 
+  if (node.type === 'code') {
+    const declared = declaredCodeOutputs(node);
+    if (declared.length > 0) {
+      const key = outputKeyOf(node.config.outputKey, 'code');
+      return declared.map((output) => ({
+        ref: `${node.id}.${output.name}`,
+        nodeId: node.id,
+        name: output.name,
+        label: output.name,
+        type: output.type,
+        path: `scratchpad.${key}.${output.name}`,
+      }));
+    }
+  }
+
   const spec = manifestOf(node.type);
   const declared = spec?.outputs ?? [];
   const key = outputKeyOf(node.config.outputKey, defaultOutputKey(node.type));
-  return declared.flatMap((output) => {
+  const ports = declared.flatMap((output) => {
     if (!output.name || !isPortType(output.type)) return [];
     const type = node.type === 'code' ? codeOutputType(node, output.type) : output.type;
-    const path = output.name === 'result' || output.name === 'text'
+    const path = output.name === 'result' || output.name === 'text' || output.name === 'output'
       ? `scratchpad.${key}`
       : `scratchpad.${key}.${output.name}`;
     return [{
@@ -119,6 +134,28 @@ export function outputsOf(node: GraphNode): OutputPort[] {
       path,
     }];
   });
+  if (node.type === 'llm') {
+    const output = ports.find((port) => port.name === 'output');
+    if (output && !ports.some((port) => port.name === 'text')) {
+      ports.push({ ...output, name: 'text', ref: `${node.id}.text`, label: 'text' });
+    }
+  }
+  return ports;
+}
+
+const IDENT = /^[A-Za-z_][\w]*$/;
+
+function declaredCodeOutputs(node: GraphNode): Array<{ name: string; type: PortType }> {
+  if (!Array.isArray(node.config.outputs)) return [];
+  const ports: Array<{ name: string; type: PortType }> = [];
+  for (const raw of node.config.outputs) {
+    if (!raw || typeof raw !== 'object') continue;
+    const name = (raw as { name?: unknown }).name;
+    const type = (raw as { type?: unknown }).type;
+    if (typeof name !== 'string' || !name || !isPortType(type)) continue;
+    ports.push({ name, type });
+  }
+  return ports;
 }
 
 export interface Materialized {
@@ -227,9 +264,100 @@ export function checkPortRefs(order: GraphNode[]): PortProblem[] {
           problems.push(...matchRef(node.id, label, binding.ref, expected, catalog, position));
         }
       }
+      if (widget.widget === 'paramTable') {
+        problems.push(...checkParamTable(node, field, widget.valueMode ?? 'custom', catalog, position));
+      }
+      if (widget.template === 'brace') {
+        problems.push(...checkBracePrompt(node));
+      }
     }
   }
   return problems;
+}
+
+function checkParamTable(
+  node: GraphNode,
+  field: string,
+  valueMode: string,
+  catalog: OutputCatalog,
+  position: Map<string, number>,
+): PortProblem[] {
+  const raw = node.config[field];
+  if (!Array.isArray(raw)) return [];
+  const problems: PortProblem[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as { name?: unknown; type?: unknown; ref?: unknown };
+    const name = typeof row.name === 'string' ? row.name : '';
+    if (!IDENT.test(name)) {
+      problems.push({
+        code: 'INVALID_NODE_CONFIG',
+        nodeId: node.id,
+        message: `${field} 的参数名必须是标识符`,
+      });
+      continue;
+    }
+    if (seen.has(name)) {
+      problems.push({
+        code: 'INVALID_NODE_CONFIG',
+        nodeId: node.id,
+        message: `${field} 的参数名 ${name} 重复`,
+      });
+    }
+    seen.add(name);
+    if (valueMode === 'none') continue;
+    const expected: BindingType = isPortType(row.type) ? row.type : 'any';
+    const binding = readBinding(item);
+    const ref = typeof row.ref === 'string' ? row.ref : binding.ref;
+    if (valueMode === 'ref' || binding.mode === 'ref') {
+      problems.push(...matchRef(node.id, name, ref, expected, catalog, position));
+    }
+  }
+  return problems;
+}
+
+function checkBracePrompt(node: GraphNode): PortProblem[] {
+  const prompt = node.config.prompt;
+  if (typeof prompt !== 'string' || !prompt.trim()) return [];
+  const names = new Set<string>();
+  if (Array.isArray(node.config.inputs)) {
+    for (const item of node.config.inputs) {
+      if (!item || typeof item !== 'object') continue;
+      const name = (item as { name?: unknown }).name;
+      if (typeof name === 'string' && name) names.add(name);
+    }
+  }
+  const problems: PortProblem[] = [];
+  for (const name of braceNames(prompt)) {
+    if (!names.has(name)) {
+      problems.push({
+        code: 'INVALID_NODE_CONFIG',
+        nodeId: node.id,
+        message: `提示词里的 {${name}} 不是本节点的入参`,
+      });
+    }
+  }
+  return problems;
+}
+
+/** 按名字收成字典。没有声明类型时接受任意上游字段，交给调用方决定怎么写成文本。 */
+export function materializeRefRows(
+  raw: unknown,
+  catalog: OutputCatalog,
+  context: TemplateContext,
+): Record<string, unknown> {
+  if (!Array.isArray(raw)) return {};
+  const inputs: Record<string, unknown> = {};
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const name = (item as { name?: unknown }).name;
+    const type = (item as { type?: unknown }).type;
+    if (typeof name !== 'string' || !name) continue;
+    const expected: BindingType = isPortType(type) ? type : 'any';
+    inputs[name] = materializeBinding(item, expected, catalog, context, { template: false }).value;
+  }
+  return inputs;
 }
 
 function matchRef(

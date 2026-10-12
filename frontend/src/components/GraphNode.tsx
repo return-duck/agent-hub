@@ -40,6 +40,8 @@ function summaryOf(data: AgentNode['data']): string {
   if (url) return truncate(url);
   const source = textOf(config['source']);
   if (source) return truncate(source);
+  const prompt = textOf(config['prompt']);
+  if (prompt) return truncate(prompt);
   const template = textOf(config['template']);
   if (template) return truncate(template);
   const system = textOf(config['system']);

@@ -44,7 +44,8 @@ export const nodeManifest = {
                   "enum": [
                     "string",
                     "number",
-                    "boolean"
+                    "boolean",
+                    "object"
                   ]
                 },
                 "required": {
@@ -61,12 +62,21 @@ export const nodeManifest = {
       },
       "uiSchema": {
         "inputVariables": {
-          "widget": "variableList"
+          "widget": "paramTable",
+          "label": "入参",
+          "columns": [
+            "name",
+            "type",
+            "description",
+            "required"
+          ],
+          "valueMode": "none"
         }
       }
     },
     {
       "type": "prompt",
+      "palette": false,
       "displayName": "提示词",
       "category": "prompt",
       "description": "把模板渲染成一条消息，支持 {{input.x}} 与 {{scratchpad.y}}",
@@ -147,19 +157,54 @@ export const nodeManifest = {
       "type": "llm",
       "displayName": "大模型",
       "category": "model",
-      "description": "调用模型；配置了工具时会编译成 model → ToolNode → toolsCondition 的 ReAct 循环",
+      "description": "调用大语言模型，使用变量和提示词生成回复",
       "maxIncoming": 1,
       "maxOutgoing": 1,
       "outputs": [
         {
-          "name": "text",
+          "name": "output",
           "type": "string",
-          "label": "模型输出"
+          "label": "output"
         }
       ],
       "configSchema": {
         "type": "object",
         "properties": {
+          "model": {
+            "type": "string",
+            "default": ""
+          },
+          "inputs": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "mode": {
+                  "enum": [
+                    "custom",
+                    "ref"
+                  ],
+                  "default": "ref"
+                },
+                "ref": {
+                  "type": "string",
+                  "default": ""
+                },
+                "value": {}
+              }
+            }
+          },
+          "prompt": {
+            "type": "string",
+            "default": ""
+          },
           "system": {
             "anyOf": [
               {
@@ -216,26 +261,45 @@ export const nodeManifest = {
         }
       },
       "uiSchema": {
+        "model": {
+          "widget": "model",
+          "label": "模型"
+        },
+        "inputs": {
+          "widget": "paramTable",
+          "label": "入参",
+          "columns": [
+            "name",
+            "value"
+          ],
+          "valueMode": "ref"
+        },
+        "prompt": {
+          "widget": "textarea",
+          "label": "提示词",
+          "template": "brace",
+          "placeholder": "给定一个主题: {topic}, 写一个100字的小故事"
+        },
         "system": {
-          "widget": "binding",
-          "valueType": "string",
-          "multiline": true,
-          "label": "系统提示",
-          "placeholder": "你是……"
+          "widget": "hidden"
         },
         "tools": {
-          "widget": "multiselect"
+          "widget": "hidden"
         },
         "temperature": {
-          "widget": "number"
+          "widget": "hidden"
         },
         "maxSteps": {
-          "widget": "number"
+          "widget": "hidden"
+        },
+        "outputKey": {
+          "widget": "hidden"
         }
       }
     },
     {
       "type": "http",
+      "palette": false,
       "displayName": "HTTP 调用",
       "category": "http",
       "description": "发起一次 HTTP 请求。URL、请求头、请求体可以选择上游输出（类型须一致），也可以自己填写。结果的状态码、响应体、JSON 可被后续节点选为输入。",
@@ -457,11 +521,7 @@ export const nodeManifest = {
                 }
               }
             ],
-            "default": {
-              "mode": "custom",
-              "value": "",
-              "ref": ""
-            }
+            "default": "return { text: String(inputs.topic ?? '') };"
           },
           "inputs": {
             "anyOf": [
@@ -506,6 +566,34 @@ export const nodeManifest = {
             ],
             "default": []
           },
+          "outputs": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "type"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "object"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "default": ""
+                }
+              }
+            }
+          },
           "outputType": {
             "enum": [
               "string",
@@ -529,19 +617,36 @@ export const nodeManifest = {
       },
       "uiSchema": {
         "source": {
-          "widget": "binding",
-          "valueType": "string",
-          "multiline": true,
+          "widget": "textarea",
           "label": "代码",
-          "placeholder": "return { status: inputs.status, query: inputs.query };"
+          "placeholder": "return { text: String(inputs.topic ?? '') };"
         },
         "inputs": {
-          "widget": "bindingList",
-          "label": "输入"
+          "widget": "paramTable",
+          "label": "入参",
+          "columns": [
+            "name",
+            "description",
+            "type",
+            "value"
+          ],
+          "valueMode": "custom"
+        },
+        "outputs": {
+          "widget": "paramTable",
+          "label": "出参",
+          "columns": [
+            "name",
+            "type",
+            "description"
+          ],
+          "valueMode": "none"
         },
         "outputType": {
-          "widget": "select",
-          "label": "输出类型"
+          "widget": "hidden"
+        },
+        "outputKey": {
+          "widget": "hidden"
         },
         "timeoutMs": {
           "widget": "number"
@@ -552,7 +657,7 @@ export const nodeManifest = {
       "type": "end",
       "displayName": "结束",
       "category": "output",
-      "description": "汇总输出。可以选择任意上游输出作为本次结果；不选则填写自定义文本，或沿用最后一条模型输出。",
+      "description": "工作流的最终节点，用出参表返回本次运行结果。",
       "maxIncoming": 1,
       "maxOutgoing": 0,
       "configSchema": {
@@ -585,6 +690,46 @@ export const nodeManifest = {
             ],
             "default": ""
           },
+          "params": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "type"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "default": ""
+                },
+                "type": {
+                  "enum": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "object"
+                  ]
+                },
+                "mode": {
+                  "enum": [
+                    "custom",
+                    "ref"
+                  ],
+                  "default": "ref"
+                },
+                "ref": {
+                  "type": "string",
+                  "default": ""
+                },
+                "value": {}
+              }
+            }
+          },
           "outputKey": {
             "type": "string",
             "default": "answer"
@@ -592,11 +737,22 @@ export const nodeManifest = {
         }
       },
       "uiSchema": {
+        "params": {
+          "widget": "paramTable",
+          "label": "出参",
+          "columns": [
+            "name",
+            "description",
+            "type",
+            "value"
+          ],
+          "valueMode": "ref"
+        },
         "value": {
-          "widget": "binding",
-          "valueType": "any",
-          "label": "输出",
-          "placeholder": "留空则使用模型输出"
+          "widget": "hidden"
+        },
+        "outputKey": {
+          "widget": "hidden"
         }
       }
     }

@@ -13,6 +13,7 @@ export interface TemplateContext {
 }
 
 const REFERENCE = /\{\{\s*([A-Za-z_][\w]*(?:\.[\w]+)*)\s*\}\}/g;
+const BRACE = /(?<!\{)\{\s*([A-Za-z_][\w]*)\s*\}(?!\})/g;
 
 export interface RenderResult {
   text: string;
@@ -52,6 +53,39 @@ export function resolvePath(path: string, context: TemplateContext): unknown {
     current = (current as Record<string, unknown>)[segment];
   }
   return current;
+}
+
+/**
+ * 大模型提示词：`{参数名}` 只替换本节点入参表里的名字。
+ * 双花括号 `{{input.x}}` 留给旧的提示词节点，这里不会命中。
+ */
+export function renderBraceTemplate(
+  template: string,
+  values: Record<string, unknown>,
+): { text: string; error?: string } {
+  const problems: string[] = [];
+  const text = template.replace(BRACE, (match, name: string) => {
+    if (!Object.prototype.hasOwnProperty.call(values, name)) {
+      problems.push(`{${name}} 不是本节点的入参`);
+      return match;
+    }
+    const value = values[name];
+    if (value === undefined || value === null || value === '') {
+      problems.push(`{${name}} 的值为空`);
+      return match;
+    }
+    if (typeof value === 'object') {
+      problems.push(`{${name}} 不能写成文本`);
+      return match;
+    }
+    return String(value);
+  });
+  if (problems.length > 0) return { text, error: problems.join('；') };
+  return { text };
+}
+
+export function braceNames(template: string): string[] {
+  return [...template.matchAll(BRACE)].map((match) => match[1] as string);
 }
 
 /** 抽出模板里引用到的变量路径，供 UI 做"变量可达性"提示 */

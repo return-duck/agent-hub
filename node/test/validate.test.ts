@@ -330,6 +330,116 @@ describe('输入引用必须类型一致且来自上游', () => {
       expect((error as CompileError).problems.map((item) => item.message).join('\n')).toContain('不能为空');
     }
   });
+
+  it('大模型提示词只能引用本节点入参，出参表只能引用上游字段', () => {
+    expect(
+      codesOf(
+        makeGraph({
+          nodes: [
+            {
+              id: 'n1',
+              type: 'start',
+              config: { inputVariables: [{ name: 'user_input', type: 'string', required: true, description: '用户输入' }] },
+            },
+            {
+              id: 'n2',
+              type: 'llm',
+              config: {
+                inputs: [{ name: 'topic', mode: 'ref', ref: 'n1.user_input' }],
+                prompt: '给定一个主题: {topic}, 写一个100字的小故事',
+              },
+            },
+            {
+              id: 'n3',
+              type: 'end',
+              config: {
+                params: [{ name: 'result', type: 'string', mode: 'ref', ref: 'n2.output' }],
+              },
+            },
+          ],
+          edges: [
+            { source: 'n1', target: 'n2' },
+            { source: 'n2', target: 'n3' },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('提示词里的花括号对不上入参时拒绝', () => {
+    const graph = makeGraph({
+      nodes: [
+        { id: 'n1', type: 'start', config: { inputVariables: [{ name: 'user_input', type: 'string', required: true }] } },
+        { id: 'n2', type: 'llm', config: { inputs: [], prompt: '主题是 {topic}' } },
+        { id: 'n4', type: 'end', config: {} },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n4' },
+      ],
+    });
+    try {
+      planGraph(parseGraph(graph));
+      expect.fail('悬空的提示词标记应该失败');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompileError);
+      expect((error as CompileError).problems.map((item) => item.message).join('\n')).toContain('{topic}');
+    }
+  });
+
+  it('代码出参按字段提供给下游，类型不一致时拒绝', () => {
+    const ok = makeGraph({
+      nodes: [
+        { id: 'n1', type: 'start', config: { inputVariables: [{ name: 'user_input', type: 'string', required: true }] } },
+        {
+          id: 'n2',
+          type: 'code',
+          config: {
+            source: 'return { bodyText: inputs.topic, count: 1 };',
+            inputs: [{ name: 'topic', type: 'string', mode: 'ref', ref: 'n1.user_input' }],
+            outputs: [
+              { name: 'bodyText', type: 'string' },
+              { name: 'count', type: 'number' },
+            ],
+          },
+        },
+        {
+          id: 'n4',
+          type: 'end',
+          config: { params: [{ name: 'result', type: 'string', mode: 'ref', ref: 'n2.bodyText' }] },
+        },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n4' },
+      ],
+    });
+    expect(codesOf(ok)).toEqual([]);
+
+    const mismatch = makeGraph({
+      nodes: [
+        { id: 'n1', type: 'start', config: { inputVariables: [{ name: 'user_input', type: 'string', required: true }] } },
+        {
+          id: 'n2',
+          type: 'code',
+          config: {
+            source: 'return { count: 1 };',
+            outputs: [{ name: 'count', type: 'number' }],
+          },
+        },
+        {
+          id: 'n4',
+          type: 'end',
+          config: { params: [{ name: 'result', type: 'string', mode: 'ref', ref: 'n2.count' }] },
+        },
+      ],
+      edges: [
+        { source: 'n1', target: 'n2' },
+        { source: 'n2', target: 'n4' },
+      ],
+    });
+    expect(codesOf(mismatch)).toContain('INVALID_NODE_CONFIG');
+  });
 });
 
 describe('图解析', () => {

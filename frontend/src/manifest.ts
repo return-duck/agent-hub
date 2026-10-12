@@ -11,7 +11,7 @@ import type { NodeTypeSpec, ToolName, VariableDecl } from './generated/manifest.
 export const manifest = nodeManifest;
 
 export function nodeSpec(type: string): NodeTypeSpec | undefined {
-  return (nodeManifest.nodeTypes as readonly NodeTypeSpec[]).find((spec) => spec.type === type);
+  return (nodeManifest.nodeTypes as unknown as readonly NodeTypeSpec[]).find((spec) => spec.type === type);
 }
 
 export function toolNames(): ToolName[] {

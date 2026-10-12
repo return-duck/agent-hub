@@ -15,9 +15,9 @@ import { httpRequest, redactHeaders } from '../tools/httpRequest.js';
 import { contentToText } from '../util/messageText.js';
 import { outputKeyOf, resolveBindings } from './bindings.js';
 import { emitNodeLog, NodeRunError, stringifyOutput, toJsonValue } from './nodeLog.js';
-import { materializeBinding, materializeInputList, readBinding, type OutputCatalog } from './ports.js';
+import { materializeBinding, materializeInputList, materializeRefRows, readBinding, type OutputCatalog } from './ports.js';
 import { runJavaScript } from './runJs.js';
-import type { TemplateContext } from './template.js';
+import { renderBraceTemplate, type TemplateContext } from './template.js';
 import type { AgentStateType } from './state.js';
 
 export const MODEL_SUFFIX = '__model';
@@ -125,10 +125,40 @@ export function createPromptRunner(node: GraphNode, deps: NodeDeps): NodeRunner 
   };
 }
 
-/** end：把最后一条 AI 消息落到 scratchpad[outputKey]，作为本次运行的产物 */
+/** end：出参表求值后就是本次结果。没有出参表的旧图仍沿用原来的取值方式。 */
 export function createEndRunner(node: GraphNode, deps: NodeDeps): NodeRunner {
   return async (state, config) => {
     const outputKey = outputKeyOf(node.config.outputKey, 'answer');
+    if (Array.isArray(node.config.params)) {
+      const context = { input: state.input, scratchpad: state.scratchpad };
+      const catalog = deps.outputs ?? new Map();
+      const result: Record<string, unknown> = {};
+      for (const raw of node.config.params) {
+        if (!raw || typeof raw !== 'object') continue;
+        const row = raw as { name?: unknown; type?: unknown };
+        const name = typeof row.name === 'string' ? row.name : '';
+        if (!name) continue;
+        const expected = row.type === 'string' || row.type === 'number' || row.type === 'boolean' || row.type === 'object'
+          ? row.type
+          : 'any';
+        result[name] = materializeBinding(raw, expected, catalog, context).value;
+      }
+      const keys = Object.keys(result);
+      const only = keys.length === 1 ? result[keys[0] as string] : undefined;
+      const answer = keys.length === 1 && typeof only === 'string' ? only : result;
+      await emitNodeLog(
+        node.id,
+        {
+          nodeType: 'end',
+          level: 'info',
+          message: '按出参表汇总结果',
+          output: answer,
+          publishesAnswer: true,
+        },
+        config,
+      );
+      return { scratchpad: { [outputKey]: answer } };
+    }
     const explicit = readBinding(node.config.value);
     const context = { input: state.input, scratchpad: state.scratchpad };
     if (explicit.mode === 'ref' && explicit.ref) {
@@ -235,8 +265,17 @@ export function createModelRunner(node: GraphNode, deps: NodeDeps): NodeRunner {
   const bound = runnable;
 
   return async (state, config) => {
+    const requested = typeof node.config.model === 'string' ? node.config.model.trim() : '';
+    const actual = deps.config.model.name;
+    if (requested && requested !== actual && requested !== `${deps.config.model.provider}/${actual}`) {
+      throw new NodeRunError(
+        'INVALID_INPUT',
+        `节点选择的模型是 ${requested}，当前运行时模型是 ${actual}`,
+      );
+    }
     const boundContext = { input: state.input, scratchpad: state.scratchpad };
-    const system = materializeBinding(node.config.system, 'string', deps.outputs ?? new Map(), boundContext, {
+    const catalog = deps.outputs ?? new Map();
+    const system = materializeBinding(node.config.system, 'string', catalog, boundContext, {
       template: true,
     });
     for (const warning of system.warnings) {
@@ -244,7 +283,30 @@ export function createModelRunner(node: GraphNode, deps: NodeDeps): NodeRunner {
     }
     const trimmed = trimToCharBudget(state.messages, deps.config.maxContextChars);
     const systemText = String(system.value ?? '').trim();
-    const context = systemText ? [new SystemMessage(systemText), ...trimmed] : trimmed;
+    const promptRaw = typeof node.config.prompt === 'string' ? node.config.prompt : '';
+    const promptMessages: BaseMessage[] = [];
+    if (promptRaw.trim()) {
+      const named = materializeRefRows(node.config.inputs, catalog, boundContext);
+      const rendered = renderBraceTemplate(promptRaw, named);
+      if (rendered.error) {
+        throw new NodeRunError('INVALID_INPUT', `提示词替换失败: ${rendered.error}`);
+      }
+      promptMessages.push(new HumanMessage(rendered.text));
+      await emitNodeLog(
+        node.id,
+        {
+          nodeType: 'llm',
+          level: 'info',
+          message: '提示词已替换入参',
+          input: named,
+          output: rendered.text,
+        },
+        config,
+      );
+    }
+    const context = systemText
+      ? [new SystemMessage(systemText), ...trimmed, ...promptMessages]
+      : [...trimmed, ...promptMessages];
     await emitNodeLog(
       node.id,
       {
@@ -403,7 +465,7 @@ export function createCodeRunner(node: GraphNode, deps: NodeDeps): NodeRunner {
       for (const line of result.logs) {
         await emitNodeLog(node.id, { nodeType: 'code', level: line.level, message: line.message }, config);
       }
-      const output = toJsonValue(result.value);
+      const output = assertCodeOutputs(toJsonValue(result.value), node.config.outputs);
       await emitNodeLog(
         node.id,
         { nodeType: 'code', level: 'info', message: `写入 scratchpad.${outputKey}`, output },
@@ -422,6 +484,35 @@ export function createCodeRunner(node: GraphNode, deps: NodeDeps): NodeRunner {
       throw wrapped;
     }
   };
+}
+
+function assertCodeOutputs(value: unknown, declared: unknown): unknown {
+  if (!Array.isArray(declared) || declared.length === 0) return value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new NodeRunError('INVALID_INPUT', '代码需要 return 一个对象，并且包含每个出参');
+  }
+  const record = value as Record<string, unknown>;
+  for (const raw of declared) {
+    if (!raw || typeof raw !== 'object') continue;
+    const row = raw as { name?: unknown; type?: unknown };
+    const name = typeof row.name === 'string' ? row.name : '';
+    if (!name) continue;
+    if (!(name in record) || record[name] === undefined) {
+      throw new NodeRunError('INVALID_INPUT', `代码返回值缺少出参 ${name}`);
+    }
+    if (!matchesDeclaredType(record[name], row.type)) {
+      throw new NodeRunError('INVALID_INPUT', `出参 ${name} 的类型应为 ${String(row.type)}`);
+    }
+  }
+  return record;
+}
+
+function matchesDeclaredType(value: unknown, type: unknown): boolean {
+  if (type === 'string') return typeof value === 'string';
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
+  if (type === 'boolean') return typeof value === 'boolean';
+  if (type === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return true;
 }
 
 function parseHeaders(raw: string): Record<string, string> {
