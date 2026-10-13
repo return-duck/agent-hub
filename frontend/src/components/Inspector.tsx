@@ -1,3 +1,4 @@
+import { Button, Checkbox, Empty, Input, InputNumber, Select, Tag, Typography } from 'antd';
 import { useStudio, type AgentNode } from '../store/studioStore.js';
 import { nodeSpec, toolNames } from '../manifest.js';
 import type { JsonSchemaProperty, OutputPortSpec, VariableDecl } from '../generated/manifest.js';
@@ -18,10 +19,7 @@ export function Inspector() {
   const node = nodes.find((n) => n.id === selectedNodeId);
   if (!node) {
     return (
-      <div className="panel-empty">
-        <p>选中画布上的节点来编辑它的配置。</p>
-        <p className="muted">左侧点节点类型即可添加到画布。</p>
-      </div>
+      <Empty description="选中画布上的节点来编辑它的配置。左侧点节点类型即可添加到画布。" />
     );
   }
 
@@ -33,19 +31,16 @@ export function Inspector() {
   return (
     <div className="inspector">
       <div className="inspector__head">
-        <span className="badge">{spec?.displayName ?? node.type}</span>
-        <code className="muted">{node.id}</code>
+        <Tag>{spec?.displayName ?? node.type}</Tag>
+        <Typography.Text type="secondary" code>{node.id}</Typography.Text>
       </div>
 
-      <label className="field">
+      <div className="field">
         <span className="field__label">节点名称</span>
-        <input
-          value={node.data.label}
-          onChange={(event) => setLabel(node.id, event.target.value)}
-        />
-      </label>
+        <Input value={node.data.label} onChange={(event) => setLabel(node.id, event.target.value)} />
+      </div>
 
-      {spec?.description && <p className="hint">{spec.description}</p>}
+      {spec?.description && <Typography.Paragraph type="secondary">{spec.description}</Typography.Paragraph>}
 
       {Object.entries(properties).map(([key, property]) => {
         const ui = uiSchema[key];
@@ -67,9 +62,9 @@ export function Inspector() {
 
       {spec?.outputs && !properties['outputs'] && <ReadOnlyOutputs outputs={spec.outputs} />}
 
-      <button className="btn btn-danger btn-block" onClick={() => removeNode(node.id)}>
+      <Button danger block onClick={() => removeNode(node.id)}>
         删除该节点
-      </button>
+      </Button>
     </div>
   );
 }
@@ -159,23 +154,13 @@ function Field({ name, property, ui, value, nodes, edges, nodeId, onChange }: Fi
     return (
       <div className="field">
         <span className="field__label">{label}</span>
-        <div className="chips">
-          {(property.items.enum ?? []).map((option) => {
-            const active = selected.includes(option);
-            return (
-              <button
-                key={option}
-                type="button"
-                className={`chip ${active ? 'chip-active' : ''}`}
-                onClick={() =>
-                  onChange(active ? selected.filter((v) => v !== option) : [...selected, option])
-                }
-              >
-                {option}
-              </button>
-            );
-          })}
-        </div>
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          value={selected}
+          options={(property.items.enum ?? []).map((option) => ({ value: option, label: option }))}
+          onChange={(next) => onChange(next)}
+        />
         {selected.length === 0 && (
           <p className="hint">
             未绑定工具：该模型节点只做一次调用。绑定工具后会编译成 ReAct 循环（model → tools → model）。
@@ -189,16 +174,12 @@ function Field({ name, property, ui, value, nodes, edges, nodeId, onChange }: Fi
     return (
       <label className="field">
         <span className="field__label">{label}</span>
-        <select
+        <Select
+          style={{ width: '100%' }}
           value={String(value ?? property.default ?? '')}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {property.enum.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+          options={property.enum.map((option) => ({ value: option, label: option }))}
+          onChange={(next) => onChange(next)}
+        />
       </label>
     );
   }
@@ -207,14 +188,12 @@ function Field({ name, property, ui, value, nodes, edges, nodeId, onChange }: Fi
     return (
       <label className="field">
         <span className="field__label">{label}</span>
-        <input
-          type="number"
+        <InputNumber
+          style={{ width: '100%' }}
           min={property.minimum}
           max={property.maximum}
-          value={value === undefined || value === null ? '' : Number(value)}
-          onChange={(event) =>
-            onChange(event.target.value === '' ? undefined : Number(event.target.value))
-          }
+          value={value === undefined || value === null || value === '' ? null : Number(value)}
+          onChange={(next) => onChange(next ?? undefined)}
         />
       </label>
     );
@@ -226,7 +205,7 @@ function Field({ name, property, ui, value, nodes, edges, nodeId, onChange }: Fi
     return (
       <label className="field">
         <span className="field__label">{label}</span>
-        <textarea
+        <Input.TextArea
           rows={ui.template === 'brace' ? 6 : 8}
           placeholder={ui.placeholder}
           value={text}
@@ -242,7 +221,7 @@ function Field({ name, property, ui, value, nodes, edges, nodeId, onChange }: Fi
   return (
     <label className="field">
       <span className="field__label">{label}</span>
-      <input
+      <Input
         placeholder={ui?.placeholder}
         value={String(value ?? property.default ?? '')}
         onChange={(event) => onChange(event.target.value)}
@@ -342,10 +321,10 @@ function BindingListField({
     return (
       <div className="field">
         <span className="field__label">{label}</span>
-        <textarea rows={3} value={value} onChange={(event) => onChange(event.target.value)} />
-        <button type="button" className="btn btn-mini" onClick={() => onChange([])}>
+        <Input.TextArea rows={3} value={value} onChange={(event) => onChange(event.target.value)} />
+        <Button size="small" onClick={() => onChange([])}>
           改用下拉选择
-        </button>
+        </Button>
         <p className="hint">这是旧的 name=input.x 写法。改用下拉后，每一项都可以按类型选择上游输出。</p>
       </div>
     );
@@ -368,29 +347,19 @@ function BindingListField({
           return (
             <div className="binding-row" key={index}>
               <div className="binding-row__head">
-                <input
+                <Input
                   placeholder="输入名，如 query"
                   value={name}
                   onChange={(event) => update(index, { name: event.target.value })}
                 />
-                <select
+                <Select
                   value={type}
-                  onChange={(event) =>
-                    update(index, { type: event.target.value, mode: 'custom', ref: '', value: '' })
-                  }
-                >
-                  <option value="string">string</option>
-                  <option value="number">number</option>
-                  <option value="boolean">boolean</option>
-                  <option value="object">object</option>
-                </select>
-                <button
-                  type="button"
-                  className="btn btn-mini"
-                  onClick={() => onChange(rows.filter((_, i) => i !== index))}
-                >
+                  options={PORT_TYPE_OPTIONS}
+                  onChange={(next) => update(index, { type: next, mode: 'custom', ref: '', value: '' })}
+                />
+                <Button size="small" onClick={() => onChange(rows.filter((_, i) => i !== index))}>
                   ×
-                </button>
+                </Button>
               </div>
               <GroupedRefSelect
                 accept={type}
@@ -415,13 +384,9 @@ function BindingListField({
           );
         })}
       </div>
-      <button
-        type="button"
-        className="btn btn-mini"
-        onClick={() => onChange([...rows, { name: '', type: 'string', mode: 'custom', value: '', ref: '' }])}
-      >
+      <Button size="small" onClick={() => onChange([...rows, { name: '', type: 'string', mode: 'custom', value: '', ref: '' }])}>
         + 添加输入
-      </button>
+      </Button>
       <p className="hint">每一项只列出类型相同的上游输出。不选则填写自定义值。代码里用 inputs.名字 读取。</p>
     </div>
   );
@@ -443,26 +408,31 @@ function LiteralInput({
   if (type === 'boolean') {
     const current = value === true || value === 'true' ? 'true' : 'false';
     return (
-      <select value={current} onChange={(event) => onChange(event.target.value === 'true')}>
-        <option value="true">true</option>
-        <option value="false">false</option>
-      </select>
+      <Select
+        style={{ width: '100%' }}
+        value={current}
+        options={[
+          { value: 'true', label: 'true' },
+          { value: 'false', label: 'false' },
+        ]}
+        onChange={(next) => onChange(next === 'true')}
+      />
     );
   }
   if (type === 'number') {
     return (
-      <input
-        type="number"
+      <InputNumber
+        style={{ width: '100%' }}
         placeholder={placeholder}
-        value={value === undefined || value === null || value === '' ? '' : Number(value)}
-        onChange={(event) => onChange(event.target.value === '' ? '' : Number(event.target.value))}
+        value={value === undefined || value === null || value === '' ? null : Number(value)}
+        onChange={(next) => onChange(next ?? '')}
       />
     );
   }
   if (multiline || type === 'object') {
     const text = typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
     return (
-      <textarea
+      <Input.TextArea
         rows={4}
         placeholder={placeholder}
         value={text}
@@ -471,13 +441,20 @@ function LiteralInput({
     );
   }
   return (
-    <input
+    <Input
       placeholder={placeholder}
       value={value == null ? '' : String(value)}
       onChange={(event) => onChange(event.target.value)}
     />
   );
 }
+
+const PORT_TYPE_OPTIONS = [
+  { value: 'string', label: 'string' },
+  { value: 'number', label: 'number' },
+  { value: 'boolean', label: 'boolean' },
+  { value: 'object', label: 'object' },
+];
 
 function isPortType(value: unknown): value is PortType {
   return value === 'string' || value === 'number' || value === 'boolean' || value === 'object';
@@ -504,29 +481,24 @@ function GroupedRefSelect({
 }) {
   const groups: OutputGroup[] = outputGroups(nodes, edges, nodeId, accept);
   const known = groups.some((group) => group.choices.some((choice) => choice.ref === refValue));
+  const options = [
+    ...(allowEmpty || !refValue ? [{ value: '', label: allowEmpty ? emptyLabel : '选择字段' }] : []),
+    ...(refValue && !known ? [{ value: refValue, label: `${refValue}（已删除或类型不符）` }] : []),
+    ...groups.map((group) => ({
+      label: group.title,
+      options: group.choices.map((choice) => ({ value: choice.ref, label: choice.label })),
+    })),
+  ];
   return (
-    <select
-      className="binding-source"
+    <Select
+      style={{ width: '100%' }}
       value={refValue}
-      onChange={(event) => {
-        const ref = event.target.value;
+      options={options}
+      onChange={(ref) => {
         const choice = groups.flatMap((group) => group.choices).find((item) => item.ref === ref);
         onChange(ref, choice?.type);
       }}
-    >
-      {allowEmpty && <option value="">{emptyLabel}</option>}
-      {!allowEmpty && !refValue && <option value="">选择字段</option>}
-      {refValue && !known && <option value={refValue}>{refValue}（已删除或类型不符）</option>}
-      {groups.map((group) => (
-        <optgroup key={group.nodeId} label={group.title}>
-          {group.choices.map((choice) => (
-            <option key={choice.ref} value={choice.ref}>
-              {choice.label}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    />
   );
 }
 
@@ -547,14 +519,13 @@ function ModelField({
   return (
     <label className="field">
       <span className="field__label">{label}</span>
-      <select value={selected} onChange={(event) => onChange(event.target.value)}>
-        {options.length === 0 && <option value="">当前运行时模型</option>}
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+      <Select
+        style={{ width: '100%' }}
+        value={selected || undefined}
+        placeholder="当前运行时模型"
+        options={options.map((option) => ({ value: option, label: option }))}
+        onChange={(next) => onChange(next)}
+      />
       <p className="hint">选项来自当前运行时可用的模型。这次运行调用的就是这个进程里配置好的模型。</p>
     </label>
   );
@@ -572,9 +543,9 @@ function ReadOnlyOutputs({ outputs }: { outputs: readonly OutputPortSpec[] }) {
         </div>
         {outputs.map((output) => (
           <div className="param-table__row" key={output.name}>
-            <input value={output.name} readOnly />
-            <input value={output.type} readOnly />
-            <input value={output.label ?? ''} readOnly />
+            <Input value={output.name} readOnly />
+            <Input value={output.type} readOnly />
+            <Input value={output.label ?? ''} readOnly />
           </div>
         ))}
       </div>
@@ -607,10 +578,10 @@ function ParamTable({
     return (
       <div className="field">
         <span className="field__label">{label}</span>
-        <textarea rows={3} value={value} onChange={(event) => onChange(event.target.value)} />
-        <button type="button" className="btn btn-mini" onClick={() => onChange([])}>
+        <Input.TextArea rows={3} value={value} onChange={(event) => onChange(event.target.value)} />
+        <Button size="small" onClick={() => onChange([])}>
           改用参数表
-        </button>
+        </Button>
         <p className="hint">这是旧的 name=input.x 写法。改用参数表后，每一项都可以选择上游字段。</p>
       </div>
     );
@@ -633,9 +604,9 @@ function ParamTable({
     <div className="field">
       <div className="param-table__title">
         <span className="field__label">{label}</span>
-        <button type="button" className="btn btn-mini" onClick={() => onChange([...rows, blankRow(columns, valueMode)])}>
+        <Button size="small" onClick={() => onChange([...rows, blankRow(columns, valueMode)])}>
           +
-        </button>
+        </Button>
       </div>
       <div className="param-table">
         <div className="param-table__head" style={{ gridTemplateColumns: gridOf(columns) }}>
@@ -653,7 +624,7 @@ function ParamTable({
               {columns.map((column) => {
                 if (column === 'name') {
                   return (
-                    <input
+                    <Input
                       key={column}
                       placeholder="参数名"
                       value={typeof record['name'] === 'string' ? record['name'] : ''}
@@ -663,23 +634,19 @@ function ParamTable({
                 }
                 if (column === 'type') {
                   return (
-                    <select
+                    <Select
                       key={column}
                       value={type}
-                      onChange={(event) =>
-                        update(index, { type: event.target.value, mode: valueMode === 'none' ? undefined : 'custom', ref: '', value: '' })
+                      options={PORT_TYPE_OPTIONS}
+                      onChange={(next) =>
+                        update(index, { type: next, mode: valueMode === 'none' ? undefined : 'custom', ref: '', value: '' })
                       }
-                    >
-                      <option value="string">string</option>
-                      <option value="number">number</option>
-                      <option value="boolean">boolean</option>
-                      <option value="object">object</option>
-                    </select>
+                    />
                   );
                 }
                 if (column === 'description') {
                   return (
-                    <input
+                    <Input
                       key={column}
                       placeholder="描述"
                       value={typeof record['description'] === 'string' ? record['description'] : ''}
@@ -689,14 +656,13 @@ function ParamTable({
                 }
                 if (column === 'required') {
                   return (
-                    <label className="inline" key={column}>
-                      <input
-                        type="checkbox"
-                        checked={record['required'] !== false}
-                        onChange={(event) => update(index, { required: event.target.checked })}
-                      />
+                    <Checkbox
+                      key={column}
+                      checked={record['required'] !== false}
+                      onChange={(event) => update(index, { required: event.target.checked })}
+                    >
                       必填
-                    </label>
+                    </Checkbox>
                   );
                 }
                 return (
@@ -734,20 +700,15 @@ function ParamTable({
                 );
               })}
               <div className="param-actions">
-                <button type="button" className="btn btn-mini" onClick={() => move(index, -1)} title="上移">
+                <Button size="small" onClick={() => move(index, -1)} title="上移">
                   ↑
-                </button>
-                <button type="button" className="btn btn-mini" onClick={() => move(index, 1)} title="下移">
+                </Button>
+                <Button size="small" onClick={() => move(index, 1)} title="下移">
                   ↓
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-mini"
-                  onClick={() => onChange(rows.filter((_, i) => i !== index))}
-                  title="删除"
-                >
+                </Button>
+                <Button size="small" danger onClick={() => onChange(rows.filter((_, i) => i !== index))} title="删除">
                   ×
-                </button>
+                </Button>
               </div>
             </div>
           );
@@ -802,43 +763,30 @@ function VariableListEditor({
     <div className="variable-list">
       {variables.map((variable, index) => (
         <div className="variable-row" key={`${variable.name}-${index}`}>
-          <input
+          <Input
             placeholder="变量名，如 topic"
             value={variable.name ?? ''}
             onChange={(event) => update(index, { name: event.target.value })}
           />
-          <select
+          <Select
             value={variable.type ?? 'string'}
-            onChange={(event) => update(index, { type: event.target.value as VariableDecl['type'] })}
+            options={PORT_TYPE_OPTIONS.filter((option) => option.value !== 'object')}
+            onChange={(next) => update(index, { type: next as VariableDecl['type'] })}
+          />
+          <Checkbox
+            checked={variable.required !== false}
+            onChange={(event) => update(index, { required: event.target.checked })}
           >
-            <option value="string">string</option>
-            <option value="number">number</option>
-            <option value="boolean">boolean</option>
-          </select>
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={variable.required !== false}
-              onChange={(event) => update(index, { required: event.target.checked })}
-            />
             必填
-          </label>
-          <button
-            type="button"
-            className="btn btn-mini"
-            onClick={() => onChange(variables.filter((_, i) => i !== index))}
-          >
+          </Checkbox>
+          <Button size="small" onClick={() => onChange(variables.filter((_, i) => i !== index))}>
             ×
-          </button>
+          </Button>
         </div>
       ))}
-      <button
-        type="button"
-        className="btn btn-mini"
-        onClick={() => onChange([...variables, { name: '', type: 'string', required: true }])}
-      >
+      <Button size="small" onClick={() => onChange([...variables, { name: '', type: 'string', required: true }])}>
         + 添加变量
-      </button>
+      </Button>
       <p className="hint">
         在提示词里用 <code>{'{{input.变量名}}'}</code> 引用；运行时会按类型校验。
         可用工具：{toolNames().join('、')}

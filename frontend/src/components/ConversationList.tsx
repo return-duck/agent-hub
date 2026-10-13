@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Alert, Empty, List, Spin, Tag } from 'antd';
 import { ApiError, api, type ConversationSummary } from '../api/client.js';
 import { useStudio } from '../store/studioStore.js';
 
@@ -18,7 +19,6 @@ export function ConversationList() {
 
   useEffect(() => {
     if (!agentId || dirty) {
-      // 还没保存过的 agent 没有会话可列
       setItems([]);
       return;
     }
@@ -32,33 +32,31 @@ export function ConversationList() {
   }, [agentId, dirty]);
 
   if (!agentId || dirty) {
-    return <div className="conv-empty">保存后这里会显示该 agent 的会话。</div>;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="保存后这里会显示该 agent 的会话。" />;
   }
   if (loading) {
-    return <div className="conv-empty">加载会话…</div>;
+    return <Spin tip="加载会话…" />;
   }
   if (error) {
-    return <div className="conv-empty conv-empty--error">{error}</div>;
+    return <Alert type="error" showIcon message={error} />;
   }
   if (items.length === 0) {
-    return <div className="conv-empty">还没有会话。跑一次，或把 agent 发布出去让别人聊。</div>;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有会话。跑一次，或把 agent 发布出去让别人聊。" />;
   }
 
   return (
-    <div className="conv-list">
-      {items.map((c) => (
-        <div key={c.id} className="conv">
-          <div className="conv__main">
-            <div className="conv__title">{c.title || '新会话'}</div>
-            <div className="conv__meta">
-              {new Date(c.createdAt).toLocaleString()} · {c.messageCount} 条消息
-            </div>
-          </div>
-          <span className={`badge ${c.fromVisitor ? 'badge-warn' : 'badge-ok'}`}>
-            {c.fromVisitor ? '访客' : '本机'}
-          </span>
-        </div>
-      ))}
-    </div>
+    <List
+      dataSource={items}
+      renderItem={(c) => (
+        <List.Item
+          extra={<Tag color={c.fromVisitor ? 'warning' : 'success'}>{c.fromVisitor ? '访客' : '本机'}</Tag>}
+        >
+          <List.Item.Meta
+            title={c.title || '新会话'}
+            description={`${new Date(c.createdAt).toLocaleString()} · ${c.messageCount} 条消息`}
+          />
+        </List.Item>
+      )}
+    />
   );
 }

@@ -1,3 +1,4 @@
+import { Button, Empty, List, Popconfirm, Typography } from 'antd';
 import { useStudio } from '../store/studioStore.js';
 import { manifest } from '../manifest.js';
 
@@ -13,42 +14,53 @@ export function AgentSidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar__section">
-        <div className="sidebar__title">我的 agent</div>
-        <button className="btn btn-primary btn-block" onClick={newAgent}>
+        <Typography.Text strong>我的 agent</Typography.Text>
+        <Button type="primary" block onClick={newAgent} style={{ marginTop: 8 }}>
           + 新建 agent
-        </button>
-        <div className="agent-list">
-          {agents.length === 0 && !loading && <p className="muted">还没有保存过 agent。</p>}
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
+        </Button>
+        <List
+          className="agent-list"
+          locale={{ emptyText: loading ? '加载中…' : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有保存过 agent。" /> }}
+          dataSource={agents}
+          renderItem={(agent) => (
+            <List.Item
               className={`agent-item ${agent.id === agentId ? 'active' : ''}`}
               onClick={() => void selectAgent(agent.id)}
+              actions={[
+                <Popconfirm
+                  key="delete"
+                  title="删除这个 agent？"
+                  onConfirm={(event) => {
+                    event?.stopPropagation();
+                    void removeAgent(agent.id);
+                  }}
+                  onCancel={(event) => event?.stopPropagation()}
+                >
+                  <Button
+                    size="small"
+                    danger
+                    title="删除"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    ×
+                  </Button>
+                </Popconfirm>,
+              ]}
             >
-              <div className="agent-item__name">{agent.name}</div>
-              <div className="agent-item__meta">
-                {agent.nodeCount} 个节点 · v{agent.graphSchemaVersion}
-              </div>
-              <button
-                className="btn btn-mini btn-danger"
-                title="删除"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void removeAgent(agent.id);
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
+              <List.Item.Meta
+                title={agent.name}
+                description={`${agent.nodeCount} 个节点 · v${agent.graphSchemaVersion}`}
+              />
+            </List.Item>
+          )}
+        />
       </div>
 
       <div className="sidebar__section">
-        <div className="sidebar__title">节点（点击添加）</div>
+        <Typography.Text strong>节点（点击添加）</Typography.Text>
         <div className="palette">
           {manifest.nodeTypes.filter((spec) => !('palette' in spec) || spec.palette !== false).map((spec) => (
-            <button
+            <Button
               key={spec.type}
               className="palette__item"
               draggable
@@ -58,12 +70,12 @@ export function AgentSidebar() {
             >
               <span className={`palette__dot cat-${spec.category}`} />
               {spec.displayName}
-            </button>
+            </Button>
           ))}
         </div>
-        <p className="hint">
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
           只支持线性链（MVP）：每个节点恰好一条出边，必须有一个「开始」和一个「结束」。
-        </p>
+        </Typography.Paragraph>
       </div>
     </aside>
   );

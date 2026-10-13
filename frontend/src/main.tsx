@@ -1,5 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ConfigProvider, theme } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import App from './App.js';
 import { LoginPage } from './components/LoginPage.js';
 import { PublicChatPage } from './components/PublicChatPage.js';
@@ -42,6 +44,18 @@ function Root() {
 
 createRoot(container).render(
   <StrictMode>
-    <Root />
+    <ConfigProvider
+      locale={zhCN}
+      button={{ autoInsertSpace: false }}
+      theme={{
+        algorithm: theme.darkAlgorithm,
+        token: {
+          colorPrimary: '#3b82f6',
+          borderRadius: 8,
+        },
+      }}
+    >
+      <Root />
+    </ConfigProvider>
   </StrictMode>,
 );

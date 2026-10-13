@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Button, Empty, Input, Space, Tag } from 'antd';
 import {
   ApiError,
   api,
@@ -268,17 +269,18 @@ export function PublicChatPage({ slug }: { slug: string }) {
           {agent.description && <div className="chat__agent-desc">{agent.description}</div>}
         </div>
 
-        <button className="btn btn-primary btn-block" type="button" onClick={newConversation}>
-          + 新对话
-        </button>
+        <Button type="primary" block onClick={newConversation}>
+          新对话
+        </Button>
 
         <div className="chat__side-title">我的会话（{conversations.length}）</div>
         <div className="chat__conv-list">
           {conversations.map((c) => (
-            <button
+            <Button
               key={c.id}
-              type="button"
-              className={`chat__conv${c.id === activeId ? ' chat__conv--active' : ''}`}
+              block
+              type={c.id === activeId ? 'primary' : 'text'}
+              className="chat__conv"
               onClick={() => {
                 streamRef.current?.close();
                 setActiveId(c.id);
@@ -290,9 +292,9 @@ export function PublicChatPage({ slug }: { slug: string }) {
             >
               <span className="chat__conv-title">{c.title || '新会话'}</span>
               <span className="chat__conv-meta">{c.messageCount} 条</span>
-            </button>
+            </Button>
           ))}
-          {conversations.length === 0 && <div className="chat__conv-empty">还没有会话</div>}
+          {conversations.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有会话" />}
         </div>
       </aside>
 
@@ -318,14 +320,14 @@ export function PublicChatPage({ slug }: { slug: string }) {
               </div>
               {/* 暂停/失败后，最后一条用户消息上给出"改一下重发"的入口 */}
               {canResume && m.role === 'user' && m.id === lastUserId && (
-                <div className="msg__actions">
-                  <button className="btn btn-mini" type="button" onClick={() => editLast(m)}>
+                <Space className="msg__actions" size={4}>
+                  <Button size="small" onClick={() => editLast(m)}>
                     编辑并重发
-                  </button>
-                  <button className="btn btn-mini" type="button" onClick={() => void retry()}>
+                  </Button>
+                  <Button size="small" onClick={() => void retry()}>
                     重试这一轮
-                  </button>
-                </div>
+                  </Button>
+                </Space>
               )}
             </div>
           ))}
@@ -347,12 +349,12 @@ export function PublicChatPage({ slug }: { slug: string }) {
             <div className="trace-inline">
               <div className="trace-inline__title">
                 本轮调用轨迹（{traces.length} 步）
-                <button className="btn btn-mini" type="button" onClick={() => setTraces(null)}>收起</button>
+                <Button size="small" type="text" onClick={() => setTraces(null)}>收起</Button>
               </div>
               {traces.map((span) => (
                 <details key={span.id} className="trace-inline__span">
                   <summary>
-                    <span className={`badge ${badgeFor(span)}`}>{labelOf(span)}</span>
+                    <Tag color={tagColor(span)}>{labelOf(span)}</Tag>
                     <span className="trace-inline__name">{span.name}</span>
                     {span.durationMs !== null && <span className="trace-inline__ms">{span.durationMs} ms</span>}
                   </summary>
@@ -374,10 +376,10 @@ export function PublicChatPage({ slug }: { slug: string }) {
           <div ref={bottomRef} />
         </div>
 
-        {notice && <div className="chat__notice">{notice}</div>}
+        {notice && <Alert type="warning" showIcon message={notice} />}
 
         <div className="chat__composer">
-          <textarea
+          <Input.TextArea
             value={draft}
             rows={2}
             placeholder={pendingRewindSeq !== null ? '改好后发送，旧的这一轮会被替换' : '说点什么…（Enter 发送，Shift+Enter 换行）'}
@@ -391,23 +393,20 @@ export function PublicChatPage({ slug }: { slug: string }) {
             }}
           />
           {running ? (
-            <button className="btn" type="button" onClick={() => void pause()}>
-              暂停
-            </button>
+            <Button onClick={() => void pause()}>暂停</Button>
           ) : (
-            <button className="btn btn-primary" type="button" disabled={!draft.trim()} onClick={send}>
+            <Button type="primary" disabled={!draft.trim()} onClick={send}>
               发送
-            </button>
+            </Button>
           )}
           {runId && !running && (
-            <button className="btn btn-mini" type="button" onClick={() => void showTraces()}>
+            <Button size="small" onClick={() => void showTraces()}>
               {traces ? '隐藏本轮' : '看本轮'}
-            </button>
+            </Button>
           )}
-          {/* 完整轨迹在专门的页面上看：一个会话里的多轮能一起对照 */}
-          <a className="btn btn-mini" href={publicTracePath(slug)}>
+          <Button size="small" href={publicTracePath(slug)}>
             调用轨迹
-          </a>
+          </Button>
         </div>
       </main>
     </div>
@@ -418,10 +417,10 @@ function labelOf(span: TraceSpan): string {
   return { node: '节点', model: '模型', tool: '工具', mcp: 'MCP', skill: '技能', log: '日志' }[span.kind] ?? span.kind;
 }
 
-function badgeFor(span: TraceSpan): string {
-  if (span.status === 'error') return 'badge-error';
-  if (span.status === 'cancelled') return 'badge-warn';
-  return span.kind === 'model' ? 'badge-ok' : 'badge-warn';
+function tagColor(span: TraceSpan): string {
+  if (span.status === 'error') return 'error';
+  if (span.status === 'cancelled') return 'warning';
+  return span.kind === 'model' ? 'success' : 'default';
 }
 
 /** 轨迹里的 input/output 是 {text: "..."} / {result: "..."} / 任意 JSON，统一渲染 */

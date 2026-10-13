@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Collapse, Empty, Space, Tag, Typography } from 'antd';
 import { ApiError, api, type RunSummary, type TraceSpan } from '../api/client.js';
 import { useStudio } from '../store/studioStore.js';
 
@@ -69,80 +70,84 @@ export function TracePanel() {
   if (!agentId || dirty) {
     return (
       <div className="trace-panel">
-        <div className="trace-empty">保存后这里可以查该 agent 的调用轨迹。</div>
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="保存后这里可以查该 agent 的调用轨迹。" />
       </div>
     );
   }
 
   return (
     <div className="trace-panel">
-      <button className="trace-panel__toggle" type="button" onClick={() => setOpen((v) => !v)}>
-        <span>{open ? '▾' : '▸'} 调用轨迹</span>
-        <span className="trace-panel__hint">{open ? '' : '模型输入输出 / 工具调用 / 节点耗时'}</span>
-      </button>
+      <Button block type="text" className="trace-panel__toggle" onClick={() => setOpen((v) => !v)}>
+        <span>{open ? '收起' : '展开'} 调用轨迹</span>
+        <Typography.Text type="secondary">{open ? '' : '模型输入输出 / 工具调用 / 节点耗时'}</Typography.Text>
+      </Button>
 
       {open && (
         <div className="trace-panel__body">
           <div className="trace-panel__runs">
             <div className="trace-panel__head">
               最近运行
-              <button className="btn btn-mini" type="button" onClick={() => void loadRuns()} disabled={loading}>
+              <Button size="small" onClick={() => void loadRuns()} disabled={loading}>
                 刷新
-              </button>
+              </Button>
             </div>
-            {runs.length === 0 && <div className="trace-empty">还没有运行记录</div>}
+            {runs.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有运行记录" />}
             {runs.map((run) => (
-              <button
+              <Button
                 key={run.id}
-                type="button"
-                className={`trace-run${run.id === selectedRun ? ' trace-run--active' : ''}`}
+                block
+                type={run.id === selectedRun ? 'primary' : 'text'}
                 onClick={() => setSelectedRun(run.id)}
               >
-                <span className={`badge ${statusBadge(run.status)}`}>{statusLabel(run.status)}</span>
-                <span className="trace-run__time">{new Date(run.startedAt).toLocaleTimeString()}</span>
-                <span className="trace-run__meta">
+                <Tag color={statusColor(run.status)}>{statusLabel(run.status)}</Tag>
+                <span>{new Date(run.startedAt).toLocaleTimeString()}</span>
+                <span>
                   {run.spanCount} 步
                   {run.durationMs !== null ? ` · ${run.durationMs} ms` : ''}
                   {run.retryOfRunId ? ' · 重试' : ''}
                 </span>
-                {run.answerPreview && <span className="trace-run__preview">{run.answerPreview}</span>}
-              </button>
+                {run.answerPreview && <span>{run.answerPreview}</span>}
+              </Button>
             ))}
           </div>
 
           <div className="trace-panel__spans">
-            {error && <div className="trace-empty trace-empty--error">{error}</div>}
-            {!error && spans.length === 0 && <div className="trace-empty">选中一次运行查看调用轨迹</div>}
-            {spans.map((span) => (
-              <details key={span.id} className="trace-span">
-                <summary>
-                  <span className="trace-span__seq">{span.spanSeq}</span>
-                  <span className={`badge ${kindBadge(span)}`}>{kindLabel(span)}</span>
-                  <span className="trace-span__name">{span.name}</span>
-                  {span.nodeId && <span className="trace-span__node">{span.nodeId}</span>}
-                  {span.durationMs !== null && <span className="trace-span__ms">{span.durationMs} ms</span>}
-                  {span.status !== 'ok' && <span className="trace-span__status">{span.status}</span>}
-                </summary>
-                <div className="trace-span__body">
-                  {span.error && <div className="trace-empty trace-empty--error">{span.error}</div>}
-                  {span.attributes && (
-                    <div className="trace-span__attrs">
-                      {Object.entries(span.attributes).map(([k, v]) => (
-                        <span key={k} className="trace-span__attr">
-                          {k}: {String(v)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {span.input !== null && span.input !== undefined && (
-                    <pre className="trace-span__io">输入：{'\n'}{renderIO(span.input)}</pre>
-                  )}
-                  {span.output !== null && span.output !== undefined && (
-                    <pre className="trace-span__io">输出：{'\n'}{renderIO(span.output)}</pre>
-                  )}
-                </div>
-              </details>
-            ))}
+            {error && <Alert type="error" showIcon message={error} />}
+            {!error && spans.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选中一次运行查看调用轨迹" />}
+            <Collapse
+              size="small"
+              items={spans.map((span) => ({
+                key: span.id,
+                label: (
+                  <Space size={6}>
+                    <span>{span.spanSeq}</span>
+                    <Tag color={kindColor(span)}>{kindLabel(span)}</Tag>
+                    <span>{span.name}</span>
+                    {span.nodeId && <Typography.Text type="secondary">{span.nodeId}</Typography.Text>}
+                    {span.durationMs !== null && <Typography.Text type="secondary">{span.durationMs} ms</Typography.Text>}
+                    {span.status !== 'ok' && <Tag>{span.status}</Tag>}
+                  </Space>
+                ),
+                children: (
+                  <>
+                    {span.error && <Alert type="error" showIcon message={span.error} />}
+                    {span.attributes && (
+                      <Space wrap>
+                        {Object.entries(span.attributes).map(([k, v]) => (
+                          <Tag key={k}>{k}: {String(v)}</Tag>
+                        ))}
+                      </Space>
+                    )}
+                    {span.input !== null && span.input !== undefined && (
+                      <pre className="trace-span__io">输入：{'\n'}{renderIO(span.input)}</pre>
+                    )}
+                    {span.output !== null && span.output !== undefined && (
+                      <pre className="trace-span__io">输出：{'\n'}{renderIO(span.output)}</pre>
+                    )}
+                  </>
+                ),
+              }))}
+            />
           </div>
         </div>
       )}
@@ -154,22 +159,21 @@ function statusLabel(status: RunSummary['status']): string {
   return { QUEUED: '排队', RUNNING: '运行中', SUCCEEDED: '成功', FAILED: '失败', CANCELLED: '已中断' }[status];
 }
 
-function statusBadge(status: RunSummary['status']): string {
-  if (status === 'SUCCEEDED') return 'badge-ok';
-  if (status === 'FAILED') return 'badge-error';
-  if (status === 'CANCELLED') return 'badge-warn';
-  return 'badge-warn';
+function statusColor(status: RunSummary['status']): string {
+  if (status === 'SUCCEEDED') return 'success';
+  if (status === 'FAILED') return 'error';
+  return 'warning';
 }
 
 function kindLabel(span: TraceSpan): string {
   return { node: '节点', model: '模型', tool: '工具', mcp: 'MCP', skill: '技能', log: '日志' }[span.kind] ?? span.kind;
 }
 
-function kindBadge(span: TraceSpan): string {
-  if (span.status === 'error') return 'badge-error';
-  if (span.kind === 'model') return 'badge-ok';
-  if (span.kind === 'mcp' || span.kind === 'skill') return 'badge-error';
-  return 'badge-warn';
+function kindColor(span: TraceSpan): string {
+  if (span.status === 'error') return 'error';
+  if (span.kind === 'model') return 'success';
+  if (span.kind === 'mcp' || span.kind === 'skill') return 'error';
+  return 'default';
 }
 
 function renderIO(value: unknown): string {

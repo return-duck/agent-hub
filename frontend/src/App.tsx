@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Alert, Button, Input, Space, Tag, Typography } from 'antd';
 import { api } from './api/client.js';
 import { AgentSidebar } from './components/AgentSidebar.js';
 import { ConversationList } from './components/ConversationList.js';
@@ -67,74 +68,75 @@ export default function App() {
           </div>
         </div>
 
-        <div className="topbar__form">
-          <input
+        <Space className="topbar__form" wrap>
+          <Input
             className="name-input"
             value={name}
             placeholder="agent 名称"
             onChange={(event) => setName(event.target.value)}
           />
-          <input
+          <Input
             className="desc-input"
             value={description}
             placeholder="描述（可选）"
             onChange={(event) => setDescription(event.target.value)}
           />
-          <button className="btn btn-primary" onClick={() => void save()} disabled={loading}>
+          <Button type="primary" onClick={() => void save()} disabled={loading}>
             {dirty ? '保存 *' : '已保存'}
-          </button>
-          <button
-            className="btn"
-            type="button"
+          </Button>
+          <Button
             onClick={() => void publishAgent()}
             disabled={loading}
             title="先保存，再生成一条可分享的公开链接"
           >
             {published ? '重新发布' : '发布'}
-          </button>
+          </Button>
           {published && (
-            <button className="btn btn-mini" type="button" onClick={() => void unpublishAgent()} disabled={loading}>
+            <Button size="small" onClick={() => void unpublishAgent()} disabled={loading}>
               取消发布
-            </button>
+            </Button>
           )}
-        </div>
+        </Space>
 
-        <div className="topbar__status">
-          {capabilities?.runtimeUp === false && <span className="badge badge-error">runtime 未启动</span>}
+        <Space className="topbar__status" wrap>
+          {capabilities?.runtimeUp === false && <Tag color="error">runtime 未启动</Tag>}
           {capabilities?.modelMode === 'scripted' && (
-            <span className="badge badge-warn" title="在 runtime/.env 里填 OPENAI_API_KEY 即可切换为真实模型，代码不用改">
+            <Tag color="warning" title="在 runtime/.env 里填 OPENAI_API_KEY 即可切换为真实模型，代码不用改">
               内置脚本化模型
-            </span>
+            </Tag>
           )}
           {capabilities?.modelMode === 'live' && (
-            <span className="badge badge-ok">真实模型 · {capabilities.modelName}</span>
+            <Tag color="success">真实模型 · {capabilities.modelName}</Tag>
           )}
           {user && (
             <span className="topbar__user">
-              <span className="topbar__user-name" title={user.email}>{user.displayName}</span>
-              <button className="btn btn-mini" type="button" onClick={() => void logout()}>登出</button>
+              <Typography.Text title={user.email}>{user.displayName}</Typography.Text>
+              <Button size="small" onClick={() => void logout()}>登出</Button>
             </span>
           )}
-        </div>
+        </Space>
       </header>
 
       {published && shareUrl && (
         <div className="publish-bar">
           <span className="publish-bar__label">公开链接</span>
           <a className="publish-bar__link" href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
-          <button className="btn btn-mini" type="button" onClick={() => void copyShareUrl()}>
+          <Button size="small" onClick={() => void copyShareUrl()}>
             {copied ? '已复制' : '复制'}
-          </button>
+          </Button>
           <span className="publish-bar__hint">任何拿到链接的人都可以直接对话，无需登录</span>
         </div>
       )}
 
       {notice && (
-        <div className={`notice notice-${notice.kind}`} onClick={clearNotice}>
-          <strong>{notice.text}</strong>
-          {notice.detail && <pre className="notice__detail">{notice.detail}</pre>}
-          <span className="notice__close">×</span>
-        </div>
+        <Alert
+          type={notice.kind === 'error' ? 'error' : notice.kind === 'success' ? 'success' : 'info'}
+          showIcon
+          closable
+          message={notice.text}
+          description={notice.detail}
+          onClose={clearNotice}
+        />
       )}
 
       <div className="body">

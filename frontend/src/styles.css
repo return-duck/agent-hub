@@ -93,9 +93,9 @@ pre {
   align-items: center;
 }
 
-input,
-select,
-textarea {
+input:not([class*='ant-']),
+select:not([class*='ant-']),
+textarea:not([class*='ant-']) {
   background: var(--bg-soft-2);
   border: 1px solid var(--line);
   color: var(--text);
@@ -106,14 +106,14 @@ textarea {
   min-width: 0;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
+input:not([class*='ant-']):focus,
+select:not([class*='ant-']):focus,
+textarea:not([class*='ant-']):focus {
   outline: none;
   border-color: var(--primary);
 }
 
-textarea {
+textarea:not([class*='ant-']) {
   resize: vertical;
 }
 

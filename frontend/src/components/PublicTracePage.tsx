@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Collapse, Empty, Space, Spin, Tag, Typography } from 'antd';
 import {
   ApiError,
   api,
@@ -93,16 +94,16 @@ export function PublicTracePage({ slug }: { slug: string }) {
   return (
     <div className="tracepage">
       <header className="tracepage__head">
-        <a className="btn btn-mini" href={chatPath}>
-          ← 返回对话
-        </a>
+        <Button size="small" href={chatPath}>
+          返回对话
+        </Button>
         <div className="tracepage__title">
           <strong>{agent?.name ?? '…'}</strong>
           <span className="tracepage__sub">调用轨迹</span>
         </div>
-        <button className="btn btn-mini" type="button" onClick={() => activeId && void load(activeId)}>
+        <Button size="small" onClick={() => activeId && void load(activeId)}>
           刷新
-        </button>
+        </Button>
       </header>
 
       <div className="tracepage__body">
@@ -111,27 +112,30 @@ export function PublicTracePage({ slug }: { slug: string }) {
             会话（{conversations.length}）
           </div>
           {conversations.length === 0 && (
-            <p className="trace-empty">还没有会话。先去<a href={chatPath}>对话</a>吧。</p>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={<span>还没有会话。先去 <Typography.Link href={chatPath}>对话</Typography.Link> 吧。</span>}
+            />
           )}
           {conversations.map((c) => (
-            <button
+            <Button
               key={c.id}
-              type="button"
-              className={`trace-conv${c.id === activeId ? ' trace-conv--active' : ''}`}
+              block
+              type={c.id === activeId ? 'primary' : 'text'}
               onClick={() => setActiveId(c.id)}
             >
               <span className="trace-conv__title">{c.title || '新会话'}</span>
               <span className="trace-conv__meta">{c.messageCount} 条消息</span>
-            </button>
+            </Button>
           ))}
         </aside>
 
         <main className="tracepage__main">
-          {error && <div className="trace-empty trace-empty--error">{error}</div>}
-          {loading && <div className="trace-empty">正在加载轨迹…</div>}
+          {error && <Alert type="error" showIcon message={error} />}
+          {loading && <Spin tip="正在加载轨迹…" />}
 
           {!loading && !error && trace && trace.turnCount === 0 && (
-            <div className="trace-empty">这个会话还没有产生调用轨迹。</div>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个会话还没有产生调用轨迹。" />
           )}
 
           {!loading && trace && trace.turnCount > 0 && (
@@ -156,7 +160,7 @@ function TurnCard({ turn, index }: { turn: TraceTurn; index: number }) {
     <section className="turn">
       <div className="turn__head">
         <span className="turn__index">第 {index} 轮</span>
-        <span className={`badge ${statusBadge(turn.status)}`}>{statusLabel(turn.status)}</span>
+        <Tag color={statusColor(turn.status)}>{statusLabel(turn.status)}</Tag>
         {turn.startedAt && (
           <span className="turn__time">{new Date(turn.startedAt).toLocaleString()}</span>
         )}
@@ -165,7 +169,7 @@ function TurnCard({ turn, index }: { turn: TraceTurn; index: number }) {
       </div>
 
       {turn.question && <div className="turn__question">你：{turn.question}</div>}
-      {turn.error && <div className="trace-empty trace-empty--error">失败原因：{turn.error}</div>}
+      {turn.error && <Alert type="error" showIcon message={`失败原因：${turn.error}`} />}
       {!turn.error && turn.answerPreview && (
         <div className="turn__answer">回答：{turn.answerPreview}</div>
       )}
@@ -174,7 +178,7 @@ function TurnCard({ turn, index }: { turn: TraceTurn; index: number }) {
         {turn.spans.map((span) => (
           <SpanRow key={span.id} span={span} />
         ))}
-        {turn.spans.length === 0 && <div className="trace-empty">这一轮没有轨迹记录</div>}
+        {turn.spans.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这一轮没有轨迹记录" />}
       </div>
     </section>
   );
@@ -182,34 +186,40 @@ function TurnCard({ turn, index }: { turn: TraceTurn; index: number }) {
 
 function SpanRow({ span }: { span: TraceSpan }) {
   return (
-    <details className="trace-span">
-      <summary>
-        <span className="trace-span__seq">{span.spanSeq}</span>
-        <span className={`badge ${kindBadge(span)}`}>{kindLabel(span)}</span>
-        <span className="trace-span__name">{span.name}</span>
-        {span.nodeId && <span className="trace-span__node">{span.nodeId}</span>}
-        {span.durationMs !== null && <span className="trace-span__ms">{span.durationMs} ms</span>}
-        {span.status !== 'ok' && <span className="trace-span__status">{span.status}</span>}
-      </summary>
-      <div className="trace-span__body">
-        {span.error && <div className="trace-empty trace-empty--error">{span.error}</div>}
-        {span.attributes && (
-          <div className="trace-span__attrs">
-            {Object.entries(span.attributes).map(([k, v]) => (
-              <span key={k} className="trace-span__attr">
-                {k}: {String(v)}
-              </span>
-            ))}
-          </div>
-        )}
-        {span.input !== null && span.input !== undefined && (
-          <pre className="trace-span__io">输入：{'\n'}{renderIO(span.input)}</pre>
-        )}
-        {span.output !== null && span.output !== undefined && (
-          <pre className="trace-span__io">输出：{'\n'}{renderIO(span.output)}</pre>
-        )}
-      </div>
-    </details>
+    <Collapse
+      size="small"
+      items={[{
+        key: span.id,
+        label: (
+          <Space size={6}>
+            <span>{span.spanSeq}</span>
+            <Tag color={kindColor(span)}>{kindLabel(span)}</Tag>
+            <span>{span.name}</span>
+            {span.nodeId && <Typography.Text type="secondary">{span.nodeId}</Typography.Text>}
+            {span.durationMs !== null && <Typography.Text type="secondary">{span.durationMs} ms</Typography.Text>}
+            {span.status !== 'ok' && <Tag>{span.status}</Tag>}
+          </Space>
+        ),
+        children: (
+          <>
+            {span.error && <Alert type="error" showIcon message={span.error} />}
+            {span.attributes && (
+              <Space wrap>
+                {Object.entries(span.attributes).map(([k, v]) => (
+                  <Tag key={k}>{k}: {String(v)}</Tag>
+                ))}
+              </Space>
+            )}
+            {span.input !== null && span.input !== undefined && (
+              <pre className="trace-span__io">输入：{'\n'}{renderIO(span.input)}</pre>
+            )}
+            {span.output !== null && span.output !== undefined && (
+              <pre className="trace-span__io">输出：{'\n'}{renderIO(span.output)}</pre>
+            )}
+          </>
+        ),
+      }]}
+    />
   );
 }
 
@@ -224,21 +234,21 @@ function statusLabel(status: TraceTurn['status']): string {
   }[status];
 }
 
-function statusBadge(status: TraceTurn['status']): string {
-  if (status === 'SUCCEEDED') return 'badge-ok';
-  if (status === 'FAILED') return 'badge-error';
-  return 'badge-warn';
+function statusColor(status: TraceTurn['status']): string {
+  if (status === 'SUCCEEDED') return 'success';
+  if (status === 'FAILED') return 'error';
+  return 'warning';
 }
 
 function kindLabel(span: TraceSpan): string {
   return { node: '节点', model: '模型', tool: '工具', mcp: 'MCP', skill: '技能', log: '日志' }[span.kind] ?? span.kind;
 }
 
-function kindBadge(span: TraceSpan): string {
-  if (span.status === 'error') return 'badge-error';
-  if (span.kind === 'model') return 'badge-ok';
-  if (span.kind === 'mcp' || span.kind === 'skill') return 'badge-error';
-  return 'badge-warn';
+function kindColor(span: TraceSpan): string {
+  if (span.status === 'error') return 'error';
+  if (span.kind === 'model') return 'success';
+  if (span.kind === 'mcp' || span.kind === 'skill') return 'error';
+  return 'default';
 }
 
 function renderIO(value: unknown): string {
